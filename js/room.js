@@ -157,7 +157,13 @@ function updateUI(roomData) {
     if (roomData.status === 'playing') {
         showNotification('게임이 시작되었습니다!', 'success');
         setTimeout(() => {
-            URLParams.navigate('game.html', { room: currentRoomId });
+            // 게임 종류에 따라 올바른 HTML 파일로 이동
+            const gameHtmlMap = {
+                'crazy-arcade': 'game.html',
+                'tetris': 'tetris.html',
+            };
+            const gameHtml = gameHtmlMap[currentGameId] || 'game.html';
+            URLParams.navigate(gameHtml, { room: currentRoomId });
         }, 500);
         return;
     }
@@ -294,7 +300,13 @@ async function startGame() {
 
         // 게임 페이지로 이동
         setTimeout(() => {
-            URLParams.navigate('game.html', { room: currentRoomId });
+            // 게임 종류에 따라 올바른 HTML 파일로 이동
+            const gameHtmlMap = {
+                'crazy-arcade': 'game.html',
+                'tetris': 'tetris.html',
+            };
+            const gameHtml = gameHtmlMap[currentGameId] || 'game.html';
+            URLParams.navigate(gameHtml, { room: currentRoomId });
         }, 500);
     } catch (error) {
         console.error('게임 시작 실패:', error);
