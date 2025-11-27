@@ -7,15 +7,16 @@
  * 3. 아래 설정값을 Firebase 프로젝트 정보로 교체
  */
 
-// Firebase 설정 (여기에 실제 Firebase 프로젝트 정보를 입력하세요)
+// Firebase 설정
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    databaseURL: "YOUR_DATABASE_URL", // 중요: Realtime Database URL
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyASVasoNQhJIAqxVkhXYURaS5ZIQj3xFRY",
+    authDomain: "gamebox-43200.firebaseapp.com",
+    databaseURL: "https://gamebox-43200-default-rtdb.firebaseio.com",
+    projectId: "gamebox-43200",
+    storageBucket: "gamebox-43200.firebasestorage.app",
+    messagingSenderId: "409666250076",
+    appId: "1:409666250076:web:e9e896d094e1d7dda08d99",
+    measurementId: "G-12W2TE9D1H"
 };
 
 // Firebase가 설정되었는지 확인
