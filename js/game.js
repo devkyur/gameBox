@@ -60,6 +60,8 @@ const keys = {
 
 let db = null;
 let roomRef = null;
+let lastPositionUpdate = 0;
+const POSITION_UPDATE_INTERVAL = 50; // 50ms마다 위치 업데이트 (초당 20회)
 
 /**
  * 초기화
@@ -405,11 +407,24 @@ function movePlayer() {
     const speed = CONFIG.PLAYER_SPEED + (player.speed - 1) * 0.8;
     let newX = player.x;
     let newY = player.y;
+    let moved = false;
 
-    if (keys.ArrowUp) newY -= speed / CONFIG.TILE_SIZE;
-    if (keys.ArrowDown) newY += speed / CONFIG.TILE_SIZE;
-    if (keys.ArrowLeft) newX -= speed / CONFIG.TILE_SIZE;
-    if (keys.ArrowRight) newX += speed / CONFIG.TILE_SIZE;
+    if (keys.ArrowUp) {
+        newY -= speed / CONFIG.TILE_SIZE;
+        moved = true;
+    }
+    if (keys.ArrowDown) {
+        newY += speed / CONFIG.TILE_SIZE;
+        moved = true;
+    }
+    if (keys.ArrowLeft) {
+        newX -= speed / CONFIG.TILE_SIZE;
+        moved = true;
+    }
+    if (keys.ArrowRight) {
+        newX += speed / CONFIG.TILE_SIZE;
+        moved = true;
+    }
 
     // 충돌 체크
     if (canMoveTo(newX, player.y)) {
@@ -422,15 +437,19 @@ function movePlayer() {
     // 아이템 획득 체크
     checkItemPickup(player);
 
-    // 서버에 위치 업데이트
-    updatePlayerPosition(player);
+    // 서버에 위치 업데이트 (throttle 적용 - 50ms마다)
+    const now = Date.now();
+    if (moved && now - lastPositionUpdate >= POSITION_UPDATE_INTERVAL) {
+        lastPositionUpdate = now;
+        updatePlayerPosition(player);
+    }
 }
 
 /**
  * 이동 가능한지 확인
  */
 function canMoveTo(x, y) {
-    const margin = 0.35; // 플레이어 크기의 절반
+    const margin = 0.48; // 플레이어 크기의 절반 (거의 타일 크기와 동일)
 
     // 네 모서리 체크
     const corners = [
@@ -918,7 +937,7 @@ function renderPlayers() {
 
         const px = player.x * CONFIG.TILE_SIZE;
         const py = player.y * CONFIG.TILE_SIZE;
-        const size = CONFIG.TILE_SIZE * 0.7;
+        const size = CONFIG.TILE_SIZE * 0.96; // 거의 타일 크기와 동일하게
 
         // 갇힌 플레이어는 물풍선 안에 표시
         if (player.trapped) {
