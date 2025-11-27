@@ -196,6 +196,8 @@ function setupFirebaseSync() {
                         bombPower: 1,
                         activeBombs: 0,
                         alive: true,
+                        trapped: false,
+                        trappedAt: null,
                     };
                 }
             });
@@ -221,6 +223,8 @@ function setupFirebaseSync() {
                         gameState.players[playerId].x = serverPlayer.x;
                         gameState.players[playerId].y = serverPlayer.y;
                         gameState.players[playerId].alive = serverPlayer.alive;
+                        gameState.players[playerId].trapped = serverPlayer.trapped || false;
+                        gameState.players[playerId].trappedAt = serverPlayer.trappedAt || null;
                     }
                 });
             }
@@ -321,7 +325,7 @@ function setupEventListeners() {
  */
 function movePlayer() {
     const player = gameState.players[gameState.playerId];
-    if (!player || !player.alive) return;
+    if (!player || !player.alive || player.trapped) return;
 
     const speed = CONFIG.PLAYER_SPEED + (player.speed - 1) * 0.8;
     let newX = player.x;
@@ -394,7 +398,7 @@ async function updatePlayerPosition(player) {
  */
 async function placeBomb() {
     const player = gameState.players[gameState.playerId];
-    if (!player || !player.alive) return;
+    if (!player || !player.alive || player.trapped) return;
 
     // 최대 폭탄 개수 체크
     if (player.activeBombs >= player.maxBombs) return;
@@ -514,10 +518,14 @@ async function explodeBomb(bomb) {
         map: gameState.map,
     });
 
-    // 폭발 이펙트 제거 (500ms 후)
+    // 폭발 이펙트 제거 (1000ms 후)
     setTimeout(() => {
         gameState.explosions = gameState.explosions.filter(e => e.id !== explosionId);
-    }, 500);
+
+        // 서버에서도 폭발 제거
+        const explosionsRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/explosions/${explosionId}`);
+        set(explosionsRef, null);
+    }, 1000);
 }
 
 /**
@@ -526,25 +534,55 @@ async function explodeBomb(bomb) {
 async function checkPlayerHit(explosionTiles) {
     for (const playerId in gameState.players) {
         const player = gameState.players[playerId];
-        if (!player.alive) continue;
+        if (!player.alive || player.trapped) continue;
 
         const playerTileX = Math.floor(player.x);
         const playerTileY = Math.floor(player.y);
 
         for (const tile of explosionTiles) {
             if (tile.x === playerTileX && tile.y === playerTileY) {
-                player.alive = false;
+                // 물풍선에 갇힘
+                player.trapped = true;
+                player.trappedAt = Date.now();
 
                 // 서버에 업데이트
                 const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${playerId}`);
-                await updateDB(playerRef, { alive: false });
+                await updateDB(playerRef, {
+                    trapped: true,
+                    trappedAt: player.trappedAt
+                });
 
-                // 승패 체크
-                checkGameOver();
+                // 2초 후 터지면서 사망
+                setTimeout(() => popTrappedPlayer(playerId), 2000);
                 break;
             }
         }
     }
+}
+
+/**
+ * 갇힌 플레이어 터트리기 (2초 후)
+ */
+async function popTrappedPlayer(playerId) {
+    const player = gameState.players[playerId];
+    if (!player || !player.trapped) return;
+
+    // 사망 처리
+    player.alive = false;
+    player.trapped = false;
+
+    // 서버에 업데이트
+    const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${playerId}`);
+    await updateDB(playerRef, {
+        alive: false,
+        trapped: false
+    });
+
+    // 승패 체크
+    checkGameOver();
+
+    // UI 업데이트
+    updatePlayerInfoUI();
 }
 
 /**
@@ -664,6 +702,16 @@ function updatePlayerInfoUI() {
     Object.values(gameState.players).forEach(player => {
         const div = document.createElement('div');
         div.className = `player-info ${player.alive ? 'alive' : 'dead'}`;
+
+        let statusText;
+        if (!player.alive) {
+            statusText = '사망 ❌';
+        } else if (player.trapped) {
+            statusText = '갇힘 🎈';
+        } else {
+            statusText = '생존 ✅';
+        }
+
         div.innerHTML = `
             <h3>
                 <span class="player-color" style="background: ${player.color}"></span>
@@ -673,7 +721,7 @@ function updatePlayerInfoUI() {
             <div class="player-stats">
                 <div class="stat-item">
                     <span>상태:</span>
-                    <span>${player.alive ? '생존 ✅' : '사망 ❌'}</span>
+                    <span>${statusText}</span>
                 </div>
                 <div class="stat-item">
                     <span>스피드:</span>
@@ -788,35 +836,79 @@ function renderPlayers() {
         const py = player.y * CONFIG.TILE_SIZE;
         const size = CONFIG.TILE_SIZE * 0.7;
 
-        // 그림자
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.beginPath();
-        ctx.ellipse(px, py + size * 0.4, size * 0.4, size * 0.2, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // 갇힌 플레이어는 물풍선 안에 표시
+        if (player.trapped) {
+            // 물풍선 (반투명)
+            ctx.fillStyle = 'rgba(100, 200, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(px, py, size * 0.5, 0, Math.PI * 2);
+            ctx.fill();
 
-        // 플레이어
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.arc(px, py, size * 0.4, 0, Math.PI * 2);
-        ctx.fill();
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 3;
+            ctx.stroke();
 
-        // 테두리
-        ctx.strokeStyle = '#2D3436';
-        ctx.lineWidth = 3;
-        ctx.stroke();
+            // 작은 플레이어
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(px, py, size * 0.3, 0, Math.PI * 2);
+            ctx.fill();
 
-        // 눈
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(px - 8, py - 5, 5, 0, Math.PI * 2);
-        ctx.arc(px + 8, py - 5, 5, 0, Math.PI * 2);
-        ctx.fill();
+            // 작은 눈
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(px - 5, py - 3, 3, 0, Math.PI * 2);
+            ctx.arc(px + 5, py - 3, 3, 0, Math.PI * 2);
+            ctx.fill();
 
-        ctx.fillStyle = '#2D3436';
-        ctx.beginPath();
-        ctx.arc(px - 8, py - 5, 3, 0, Math.PI * 2);
-        ctx.arc(px + 8, py - 5, 3, 0, Math.PI * 2);
-        ctx.fill();
+            ctx.fillStyle = '#2D3436';
+            ctx.beginPath();
+            ctx.arc(px - 5, py - 3, 2, 0, Math.PI * 2);
+            ctx.arc(px + 5, py - 3, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 타이머 표시
+            if (player.trappedAt) {
+                const elapsed = Date.now() - player.trappedAt;
+                const remaining = Math.max(0, 2000 - elapsed);
+                const remainingSeconds = (remaining / 1000).toFixed(1);
+
+                ctx.fillStyle = '#e74c3c';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(remainingSeconds + 's', px, py + size * 0.7);
+            }
+        } else {
+            // 그림자
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.beginPath();
+            ctx.ellipse(px, py + size * 0.4, size * 0.4, size * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 플레이어
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(px, py, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 테두리
+            ctx.strokeStyle = '#2D3436';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 눈
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(px - 8, py - 5, 5, 0, Math.PI * 2);
+            ctx.arc(px + 8, py - 5, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#2D3436';
+            ctx.beginPath();
+            ctx.arc(px - 8, py - 5, 3, 0, Math.PI * 2);
+            ctx.arc(px + 8, py - 5, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         // 이름
         ctx.fillStyle = '#2D3436';
