@@ -14,8 +14,7 @@ export const GAMES = {
         id: 'tetris',
         name: '테트리스',
         description: '블록을 쌓아 라인을 완성하세요',
-        color: 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
-        disabled: true
+        color: 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
     },
     'fighting': {
         id: 'fighting',
