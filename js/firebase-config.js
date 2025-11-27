@@ -221,6 +221,9 @@ export function ref(database, path) {
         return database.ref(path);
     } else {
         // Firebase SDK가 이미 로드되어 있음
+        if (!firebaseSDK || !firebaseSDK.firebaseDatabase) {
+            throw new Error('Firebase SDK is not initialized. Please wait for initialization to complete.');
+        }
         const { ref: firebaseRef } = firebaseSDK.firebaseDatabase;
         return firebaseRef(database, path);
     }
