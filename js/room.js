@@ -153,6 +153,15 @@ function loadRoom() {
 
 // UI 업데이트
 function updateUI(roomData) {
+    // 게임 시작 상태 확인 - 모든 플레이어를 게임 화면으로 이동
+    if (roomData.status === 'playing') {
+        showNotification('게임이 시작되었습니다!', 'success');
+        setTimeout(() => {
+            URLParams.navigate('game.html', { room: currentRoomId });
+        }, 500);
+        return;
+    }
+
     // 헤더 정보
     roomTitleEl.textContent = `🎮 ${roomData.title}`;
 
@@ -283,10 +292,10 @@ async function startGame() {
 
         showNotification('게임을 시작합니다!', 'success');
 
-        // 게임 페이지로 이동 (현재는 알림만)
+        // 게임 페이지로 이동
         setTimeout(() => {
-            showNotification('게임 화면은 곧 구현될 예정입니다!', 'info');
-        }, 1000);
+            URLParams.navigate('game.html', { room: currentRoomId });
+        }, 500);
     } catch (error) {
         console.error('게임 시작 실패:', error);
         showNotification('게임 시작에 실패했습니다.', 'error');

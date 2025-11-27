@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>물풍선 게임 - GameBox</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        #game-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        #game-canvas {
+            border: 4px solid #2D3436;
+            border-radius: 8px;
+            background: #F5F5F5;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        #game-info {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 250px;
+        }
+
+        .player-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .player-info.alive {
+            border-color: #00B894;
+        }
+
+        .player-info.dead {
+            opacity: 0.5;
+            border-color: #D63031;
+        }
+
+        .player-info h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #2D3436;
+        }
+
+        .player-stats {
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #F5F5F5;
+        }
+
+        .game-controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .game-controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .control-list {
+            font-size: 14px;
+            line-height: 2;
+        }
+
+        .timer {
+            background: #2D3436;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #game-over-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #game-over-modal.show {
+            display: flex;
+        }
+
+        .game-over-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .game-over-content h2 {
+            margin: 0 0 20px 0;
+            font-size: 32px;
+            color: #2D3436;
+        }
+
+        .winner-name {
+            font-size: 24px;
+            color: #00B894;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="game-title">🎮 물풍선 게임</h1>
+            <button class="btn btn-secondary back-btn" id="leave-game-btn" style="position: absolute; top: 20px; left: 20px;">
+                ← 나가기
+            </button>
+        </header>
+
+        <main>
+            <div id="game-container">
+                <canvas id="game-canvas" width="650" height="550"></canvas>
+
+                <div id="game-info">
+                    <div class="timer" id="game-timer">0:00</div>
+
+                    <div class="game-controls">
+                        <h3>⌨️ 조작법</h3>
+                        <div class="control-list">
+                            <div><strong>W A S D</strong> - 이동</div>
+                            <div><strong>Space</strong> - 물풍선 설치</div>
+                        </div>
+                    </div>
+
+                    <div id="players-info">
+                        <!-- 플레이어 정보가 동적으로 추가됩니다 -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 게임 종료 모달 -->
+    <div id="game-over-modal">
+        <div class="game-over-content">
+            <h2>🎉 게임 종료!</h2>
+            <div class="winner-name" id="winner-name">승자: Player 1</div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" id="return-lobby-btn" style="flex: 1;">로비로</button>
+                <button class="btn btn-primary" id="restart-game-btn" style="flex: 1;">다시하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/game.js"></script>
+</body>
+</html>
