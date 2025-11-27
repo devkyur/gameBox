@@ -78,6 +78,8 @@ async function init() {
     gameState.roomId = roomId;
     gameState.playerId = playerId;
     gameState.gameId = gameId;
+    // 게임 시작 시 플레이어 목록 초기화
+    gameState.players = {};
 
     // Firebase 초기화
     db = await getDatabase();
@@ -182,23 +184,25 @@ function setupFirebaseSync() {
         if (roomData.players) {
             const playersList = Object.values(roomData.players);
 
-            // 게임 시작 시 모든 플레이어를 새로 초기화 (능력 리셋)
+            // 게임 시작 시 플레이어가 없을 때만 초기화 (처음 한 번만)
             playersList.forEach((player, index) => {
-                const startPos = getPlayerStartPosition(index);
-                gameState.players[player.id] = {
-                    id: player.id,
-                    name: player.name,
-                    color: player.color,
-                    x: startPos.x,
-                    y: startPos.y,
-                    speed: 1,
-                    maxBombs: 1,
-                    bombPower: 1,
-                    activeBombs: 0,
-                    alive: true,
-                    trapped: false,
-                    trappedAt: null,
-                };
+                if (!gameState.players[player.id]) {
+                    const startPos = getPlayerStartPosition(index);
+                    gameState.players[player.id] = {
+                        id: player.id,
+                        name: player.name,
+                        color: player.color,
+                        x: startPos.x,
+                        y: startPos.y,
+                        speed: 1,
+                        maxBombs: 1,
+                        bombPower: 1,
+                        activeBombs: 0,
+                        alive: true,
+                        trapped: false,
+                        trappedAt: null,
+                    };
+                }
             });
 
             updatePlayerInfoUI();
