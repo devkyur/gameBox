@@ -182,24 +182,23 @@ function setupFirebaseSync() {
         if (roomData.players) {
             const playersList = Object.values(roomData.players);
 
+            // 게임 시작 시 모든 플레이어를 새로 초기화 (능력 리셋)
             playersList.forEach((player, index) => {
-                if (!gameState.players[player.id]) {
-                    const startPos = getPlayerStartPosition(index);
-                    gameState.players[player.id] = {
-                        id: player.id,
-                        name: player.name,
-                        color: player.color,
-                        x: startPos.x,
-                        y: startPos.y,
-                        speed: 1,
-                        maxBombs: 1,
-                        bombPower: 1,
-                        activeBombs: 0,
-                        alive: true,
-                        trapped: false,
-                        trappedAt: null,
-                    };
-                }
+                const startPos = getPlayerStartPosition(index);
+                gameState.players[player.id] = {
+                    id: player.id,
+                    name: player.name,
+                    color: player.color,
+                    x: startPos.x,
+                    y: startPos.y,
+                    speed: 1,
+                    maxBombs: 1,
+                    bombPower: 1,
+                    activeBombs: 0,
+                    alive: true,
+                    trapped: false,
+                    trappedAt: null,
+                };
             });
 
             updatePlayerInfoUI();
@@ -218,15 +217,27 @@ function setupFirebaseSync() {
             // 다른 플레이어들의 위치 동기화
             if (gameData.players) {
                 Object.keys(gameData.players).forEach(playerId => {
-                    if (playerId !== gameState.playerId && gameState.players[playerId]) {
-                        const serverPlayer = gameData.players[playerId];
+                    const serverPlayer = gameData.players[playerId];
+
+                    // 로컬에 플레이어가 없으면 추가
+                    if (!gameState.players[playerId]) {
+                        gameState.players[playerId] = { ...serverPlayer };
+                    }
+                    // 다른 플레이어의 상태 동기화
+                    else if (playerId !== gameState.playerId) {
                         gameState.players[playerId].x = serverPlayer.x;
                         gameState.players[playerId].y = serverPlayer.y;
                         gameState.players[playerId].alive = serverPlayer.alive;
                         gameState.players[playerId].trapped = serverPlayer.trapped || false;
                         gameState.players[playerId].trappedAt = serverPlayer.trappedAt || null;
+                        gameState.players[playerId].speed = serverPlayer.speed;
+                        gameState.players[playerId].maxBombs = serverPlayer.maxBombs;
+                        gameState.players[playerId].bombPower = serverPlayer.bombPower;
                     }
                 });
+
+                // UI 업데이트
+                updatePlayerInfoUI();
             }
 
             // 폭탄 동기화
@@ -265,10 +276,29 @@ function setupFirebaseSync() {
  * 게임 상태 초기화 (호스트만)
  */
 async function initGameState() {
+    // 플레이어 게임 상태를 완전히 초기화
+    const playersWithGameState = {};
+    Object.values(gameState.players).forEach(player => {
+        playersWithGameState[player.id] = {
+            id: player.id,
+            name: player.name,
+            color: player.color,
+            x: player.x,
+            y: player.y,
+            speed: player.speed,
+            maxBombs: player.maxBombs,
+            bombPower: player.bombPower,
+            activeBombs: player.activeBombs,
+            alive: player.alive,
+            trapped: player.trapped,
+            trappedAt: player.trappedAt,
+        };
+    });
+
     const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
     await set(gameRef, {
         map: gameState.map,
-        players: gameState.players,
+        players: playersWithGameState,
         bombs: {},
         explosions: {},
         items: {},
@@ -526,9 +556,11 @@ async function explodeBomb(bomb) {
                 // 벽 파괴
                 gameState.map[y][x] = TILE.EMPTY;
 
-                // 아이템 드랍
+                // 아이템 드랍 (폭발 이펙트 후 나타나도록 300ms 지연)
                 if (Math.random() < CONFIG.ITEM_DROP_CHANCE) {
-                    spawnItem(x, y);
+                    setTimeout(() => {
+                        spawnItem(x, y);
+                    }, 300);
                 }
                 break;
             }
@@ -566,14 +598,14 @@ async function explodeBomb(bomb) {
         createdAt: Date.now(),
     });
 
-    // 폭발 이펙트 제거 (1000ms 후)
+    // 폭발 이펙트 제거 (500ms 후)
     setTimeout(async () => {
         gameState.explosions = gameState.explosions.filter(e => e.id !== explosionId);
 
         // 서버에서도 폭발 제거
         const explosionsRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/explosions/${explosionId}`);
         await set(explosionsRef, null);
-    }, 1000);
+    }, 500);
 }
 
 /**
