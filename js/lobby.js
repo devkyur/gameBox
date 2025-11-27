@@ -92,8 +92,8 @@ function setupEventListeners() {
 }
 
 // 방 목록 불러오기
-function loadRooms() {
-    const db = getDatabase();
+async function loadRooms() {
+    const db = await getDatabase();
     roomsRef = ref(db, `rooms/${currentGameId}`);
 
     // 실시간 리스너 설정
@@ -216,7 +216,7 @@ async function handleCreateRoom(e) {
     const roomData = createRoomData(title, maxPlayers, currentGameId, playerId, playerName);
 
     try {
-        const db = getDatabase();
+        const db = await getDatabase();
         const newRoomRef = ref(db, `rooms/${currentGameId}/${roomData.id}`);
         await set(newRoomRef, roomData);
 

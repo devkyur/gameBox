@@ -68,7 +68,7 @@ async function init() {
 
 // 방 입장 처리
 async function joinRoomIfNeeded() {
-    const db = getDatabase();
+    const db = await getDatabase();
     roomRef = ref(db, `rooms/${currentGameId}/${currentRoomId}`);
 
     try {
@@ -257,8 +257,9 @@ function updateButtons(roomData) {
 // 준비 토글
 async function toggleReady() {
     try {
+        const db = await getDatabase();
         const playerRef = ref(
-            getDatabase(),
+            db,
             `rooms/${currentGameId}/${currentRoomId}/players/${currentPlayerId}/ready`
         );
         await set(playerRef, !isReady);
@@ -273,8 +274,9 @@ async function startGame() {
     if (!isHost) return;
 
     try {
+        const db = await getDatabase();
         const statusRef = ref(
-            getDatabase(),
+            db,
             `rooms/${currentGameId}/${currentRoomId}/status`
         );
         await set(statusRef, 'playing');
@@ -294,9 +296,10 @@ async function startGame() {
 // 방 나가기
 async function leaveRoom() {
     try {
+        const db = await getDatabase();
         // 플레이어 제거
         const playerRef = ref(
-            getDatabase(),
+            db,
             `rooms/${currentGameId}/${currentRoomId}/players/${currentPlayerId}`
         );
         await remove(playerRef);
@@ -316,14 +319,14 @@ async function leaveRoom() {
                     // 새로운 방장 지정
                     const newHostId = remainingPlayers[0];
                     const hostRef = ref(
-                        getDatabase(),
+                        db,
                         `rooms/${currentGameId}/${currentRoomId}/hostId`
                     );
                     await set(hostRef, newHostId);
 
                     // 새 방장의 ready 상태 false로
                     const newHostReadyRef = ref(
-                        getDatabase(),
+                        db,
                         `rooms/${currentGameId}/${currentRoomId}/players/${newHostId}/ready`
                     );
                     await set(newHostReadyRef, false);
