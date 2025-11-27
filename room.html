@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대기실 - GameBox</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="room-title">대기실</h1>
+            <p class="subtitle" id="room-info">플레이어: 0/4</p>
+        </header>
+
+        <main>
+            <div class="flex-between mb-20">
+                <button class="btn btn-secondary back-btn" id="leave-room-btn">← 로비로</button>
+                <div class="flex gap-10">
+                    <button class="btn btn-success" id="ready-btn">준비</button>
+                    <button class="btn btn-primary" id="start-btn" style="display: none;">게임 시작</button>
+                </div>
+            </div>
+
+            <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 20px;">
+                <!-- 플레이어 목록 -->
+                <div class="card">
+                    <h2 class="mb-20">플레이어 목록</h2>
+                    <ul class="player-list" id="player-list">
+                        <!-- 플레이어들이 여기에 동적으로 추가됩니다 -->
+                    </ul>
+                </div>
+
+                <!-- 게임 설정 -->
+                <div class="card">
+                    <h3 class="mb-20">방 정보</h3>
+                    <div style="line-height: 2;">
+                        <p><strong>방 제목:</strong><br><span id="info-room-title">-</span></p>
+                        <p><strong>방장:</strong><br><span id="info-host">-</span></p>
+                        <p><strong>인원:</strong><br><span id="info-players">0/4</span></p>
+                        <p><strong>게임:</strong><br><span id="info-game">-</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 채팅 (선택사항) -->
+            <div class="card mt-20">
+                <h3 class="mb-20">채팅</h3>
+                <div id="chat-messages" style="height: 150px; overflow-y: auto; background: #F5F5F5; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                    <p style="color: #636E72; text-align: center;">채팅 기능은 곧 추가될 예정입니다.</p>
+                </div>
+                <div class="flex gap-10">
+                    <input type="text" id="chat-input" placeholder="메시지를 입력하세요..." style="margin-bottom: 0;" disabled>
+                    <button class="btn btn-primary" id="send-chat-btn" disabled>전송</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="js/room.js"></script>
+</body>
+</html>

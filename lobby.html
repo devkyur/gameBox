@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로비 - GameBox</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="game-title">게임 로비</h1>
+            <p class="subtitle" id="game-subtitle">방을 선택하거나 새로운 방을 만드세요</p>
+        </header>
+
+        <main>
+            <div class="flex-between mb-20">
+                <button class="btn btn-secondary back-btn" id="back-btn">← 메인으로</button>
+                <button class="btn btn-primary" id="create-room-btn">+ 방 만들기</button>
+            </div>
+
+            <div class="card">
+                <h2 class="mb-20">현재 방 목록</h2>
+                <div id="room-list">
+                    <p class="text-center" style="color: #636E72; padding: 40px 0;">
+                        생성된 방이 없습니다. 새로운 방을 만들어보세요!
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 방 만들기 모달 -->
+    <div class="modal" id="create-room-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>방 만들기</h2>
+                <button class="close-btn" id="close-modal-btn">&times;</button>
+            </div>
+            <form id="create-room-form">
+                <label for="room-title">방 제목</label>
+                <input type="text" id="room-title" placeholder="방 제목을 입력하세요" required maxlength="20">
+
+                <label for="max-players">최대 인원</label>
+                <select id="max-players" required>
+                    <option value="2">2명</option>
+                    <option value="3">3명</option>
+                    <option value="4" selected>4명</option>
+                    <option value="6">6명</option>
+                    <option value="8">8명</option>
+                </select>
+
+                <div class="flex gap-10 mt-20">
+                    <button type="button" class="btn btn-secondary" id="cancel-btn" style="flex: 1;">취소</button>
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">방 만들기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/lobby.js"></script>
+</body>
+</html>

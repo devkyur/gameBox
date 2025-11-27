@@ -1,0 +1,21 @@
+# 에디터/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (필요한 경우)
+node_modules/
+
+# 환경 변수 (Firebase 설정이 여기에 있다면)
+.env
+.env.local
+
+# 로그
+*.log
+npm-debug.log*
