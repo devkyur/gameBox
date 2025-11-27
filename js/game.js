@@ -2,7 +2,7 @@
  * 물풍선 게임 로직
  */
 
-import { getDatabase, ref, set, update, onValue, off } from './firebase-config.js';
+import { getDatabase, ref, set, update as updateDB, onValue, off } from './firebase-config.js';
 import { Storage, URLParams, showNotification } from './utils.js';
 
 // 게임 설정
@@ -51,10 +51,10 @@ const ctx = canvas.getContext('2d');
 
 // 키보드 입력
 const keys = {
-    w: false,
-    a: false,
-    s: false,
-    d: false,
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false,
     space: false,
 };
 
@@ -275,7 +275,7 @@ async function initGameState() {
 function setupEventListeners() {
     // 키보드 입력
     document.addEventListener('keydown', (e) => {
-        const key = e.key.toLowerCase();
+        const key = e.key;
         if (key in keys) {
             keys[key] = true;
             e.preventDefault();
@@ -288,7 +288,7 @@ function setupEventListeners() {
     });
 
     document.addEventListener('keyup', (e) => {
-        const key = e.key.toLowerCase();
+        const key = e.key;
         if (key in keys) {
             keys[key] = false;
             e.preventDefault();
@@ -327,10 +327,10 @@ function movePlayer() {
     let newX = player.x;
     let newY = player.y;
 
-    if (keys.w) newY -= speed / CONFIG.TILE_SIZE;
-    if (keys.s) newY += speed / CONFIG.TILE_SIZE;
-    if (keys.a) newX -= speed / CONFIG.TILE_SIZE;
-    if (keys.d) newX += speed / CONFIG.TILE_SIZE;
+    if (keys.ArrowUp) newY -= speed / CONFIG.TILE_SIZE;
+    if (keys.ArrowDown) newY += speed / CONFIG.TILE_SIZE;
+    if (keys.ArrowLeft) newX -= speed / CONFIG.TILE_SIZE;
+    if (keys.ArrowRight) newX += speed / CONFIG.TILE_SIZE;
 
     // 충돌 체크
     if (canMoveTo(newX, player.y)) {
@@ -383,7 +383,7 @@ function canMoveTo(x, y) {
  */
 async function updatePlayerPosition(player) {
     const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${player.id}`);
-    await update(playerRef, {
+    await updateDB(playerRef, {
         x: player.x,
         y: player.y,
     });
@@ -508,7 +508,7 @@ async function explodeBomb(bomb) {
 
     // 서버에 업데이트
     const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
-    await update(gameRef, {
+    await updateDB(gameRef, {
         bombs: gameState.bombs.reduce((acc, b) => ({ ...acc, [b.id]: b }), {}),
         explosions: gameState.explosions.reduce((acc, e) => ({ ...acc, [e.id]: e }), {}),
         map: gameState.map,
@@ -537,7 +537,7 @@ async function checkPlayerHit(explosionTiles) {
 
                 // 서버에 업데이트
                 const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${playerId}`);
-                await update(playerRef, { alive: false });
+                await updateDB(playerRef, { alive: false });
 
                 // 승패 체크
                 checkGameOver();
@@ -626,10 +626,10 @@ async function checkGameOver() {
     if (alivePlayers.length === 1) {
         const winner = alivePlayers[0];
         const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
-        await update(gameRef, { winner: winner.id });
+        await updateDB(gameRef, { winner: winner.id });
     } else if (alivePlayers.length === 0) {
         const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
-        await update(gameRef, { winner: 'draw' });
+        await updateDB(gameRef, { winner: 'draw' });
     }
 }
 
