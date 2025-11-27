@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>테트리스 - GameBox</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        #game-container {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 20px;
+            justify-content: center;
+            align-items: flex-start;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* 왼쪽: 다른 플레이어 미니 보드 */
+        #opponents-left {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* 중앙: 메인 게임 보드 */
+        #main-game {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        #game-canvas {
+            border: 4px solid #2D3436;
+            border-radius: 8px;
+            background: #000;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        #next-piece-container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+            text-align: center;
+        }
+
+        #next-piece-canvas {
+            border: 2px solid #DFE6E9;
+            border-radius: 4px;
+            background: #F5F5F5;
+            margin-top: 10px;
+        }
+
+        /* 오른쪽: 게임 정보 */
+        #game-info {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .player-board-mini {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .player-board-mini.alive {
+            border-color: #00B894;
+        }
+
+        .player-board-mini.dead {
+            opacity: 0.5;
+            border-color: #D63031;
+        }
+
+        .player-board-mini h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            border: 2px solid #2D3436;
+        }
+
+        .mini-canvas {
+            width: 100%;
+            height: auto;
+            border: 2px solid #DFE6E9;
+            border-radius: 4px;
+            background: #000;
+        }
+
+        .score-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .score-info h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #F5F5F5;
+            font-size: 14px;
+        }
+
+        .score-value {
+            font-weight: bold;
+            color: #6C5CE7;
+        }
+
+        .game-controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .game-controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .control-list {
+            font-size: 14px;
+            line-height: 2;
+        }
+
+        .timer {
+            background: #2D3436;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .ranking-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .ranking-info h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .rank-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            background: #F5F5F5;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .rank-number {
+            font-weight: bold;
+            font-size: 18px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .rank-1 { color: #FFD700; }
+        .rank-2 { color: #C0C0C0; }
+        .rank-3 { color: #CD7F32; }
+        .rank-4 { color: #95A5A6; }
+
+        #game-over-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #game-over-modal.show {
+            display: flex;
+        }
+
+        .game-over-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .game-over-content h2 {
+            margin: 0 0 20px 0;
+            font-size: 32px;
+            color: #2D3436;
+        }
+
+        .final-ranking {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .garbage-indicator {
+            background: #FF7675;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="game-title">🧱 테트리스 대전</h1>
+            <button class="btn btn-secondary back-btn" id="leave-game-btn" style="position: absolute; top: 20px; left: 20px;">
+                ← 나가기
+            </button>
+        </header>
+
+        <main>
+            <div id="game-container">
+                <!-- 왼쪽: 상대방 보드 -->
+                <div id="opponents-left">
+                    <!-- 동적으로 추가됨 -->
+                </div>
+
+                <!-- 중앙: 메인 게임 -->
+                <div id="main-game">
+                    <div class="timer" id="game-timer">0:00</div>
+
+                    <canvas id="game-canvas" width="300" height="600"></canvas>
+
+                    <div id="next-piece-container">
+                        <h3>다음 블록</h3>
+                        <canvas id="next-piece-canvas" width="120" height="120"></canvas>
+                    </div>
+
+                    <div class="garbage-indicator" id="garbage-indicator" style="display: none;">
+                        ⚠️ 방해줄 대기: <span id="garbage-count">0</span>줄
+                    </div>
+                </div>
+
+                <!-- 오른쪽: 게임 정보 -->
+                <div id="game-info">
+                    <div class="score-info">
+                        <h3>📊 점수</h3>
+                        <div class="score-item">
+                            <span>스코어</span>
+                            <span class="score-value" id="score">0</span>
+                        </div>
+                        <div class="score-item">
+                            <span>라인</span>
+                            <span class="score-value" id="lines">0</span>
+                        </div>
+                        <div class="score-item">
+                            <span>레벨</span>
+                            <span class="score-value" id="level">1</span>
+                        </div>
+                    </div>
+
+                    <div class="game-controls">
+                        <h3>⌨️ 조작법</h3>
+                        <div class="control-list">
+                            <div><strong>←→</strong> - 좌우 이동</div>
+                            <div><strong>↓</strong> - 빠른 낙하</div>
+                            <div><strong>↑</strong> - 회전</div>
+                            <div><strong>Space</strong> - 즉시 낙하</div>
+                        </div>
+                    </div>
+
+                    <div class="ranking-info">
+                        <h3>🏆 순위</h3>
+                        <div id="ranking-list">
+                            <!-- 동적으로 추가됨 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 게임 종료 모달 -->
+    <div id="game-over-modal">
+        <div class="game-over-content">
+            <h2>🎉 게임 종료!</h2>
+            <div class="final-ranking" id="final-ranking">
+                <!-- 최종 순위 표시 -->
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" id="return-lobby-btn" style="flex: 1;">로비로</button>
+                <button class="btn btn-primary" id="restart-game-btn" style="flex: 1;">다시하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/tetris.js"></script>
+</body>
+</html>
