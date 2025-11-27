@@ -230,13 +230,17 @@ function setupFirebaseSync() {
             }
 
             // 폭탄 동기화
-            if (gameData.bombs) {
-                gameState.bombs = Object.values(gameData.bombs);
+            if (gameData.bombs && typeof gameData.bombs === 'object') {
+                gameState.bombs = Object.values(gameData.bombs).filter(b => b !== null);
+            } else {
+                gameState.bombs = [];
             }
 
             // 폭발 동기화
-            if (gameData.explosions) {
-                gameState.explosions = Object.values(gameData.explosions);
+            if (gameData.explosions && typeof gameData.explosions === 'object') {
+                gameState.explosions = Object.values(gameData.explosions).filter(e => e !== null);
+            } else {
+                gameState.explosions = [];
             }
 
             // 맵 상태 동기화
@@ -315,9 +319,46 @@ function setupEventListeners() {
         URLParams.navigate('lobby.html', { game: gameState.gameId });
     });
 
-    document.getElementById('restart-game-btn').addEventListener('click', () => {
-        location.reload();
+    document.getElementById('restart-game-btn').addEventListener('click', async () => {
+        // 게임 상태를 완전히 초기화
+        await resetGame();
     });
+}
+
+/**
+ * 게임 리셋
+ */
+async function resetGame() {
+    try {
+        // Firebase의 게임 데이터 완전히 제거
+        const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
+        await set(gameRef, null);
+
+        // 방 상태를 waiting으로 변경
+        const statusRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/status`);
+        await set(statusRef, 'waiting');
+
+        // 모든 플레이어의 ready 상태 초기화
+        const playersRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/players`);
+        const players = gameState.players;
+        const resetPlayers = {};
+        for (const playerId in players) {
+            resetPlayers[playerId] = {
+                id: playerId,
+                name: players[playerId].name,
+                color: players[playerId].color,
+                ready: false,
+                joinedAt: players[playerId].joinedAt || Date.now()
+            };
+        }
+        await set(playersRef, resetPlayers);
+
+        // room 페이지로 이동
+        URLParams.navigate('room.html', { game: gameState.gameId, room: gameState.roomId });
+    } catch (error) {
+        console.error('게임 리셋 실패:', error);
+        showNotification('게임 리셋에 실패했습니다.', 'error');
+    }
 }
 
 /**
@@ -452,6 +493,10 @@ async function explodeBomb(bomb) {
     gameState.bombs = gameState.bombs.filter(b => b.id !== bomb.id);
     gameState.map[bomb.y][bomb.x] = TILE.EMPTY;
 
+    // Firebase에서 폭탄 제거
+    const bombRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/bombs/${bomb.id}`);
+    await set(bombRef, null);
+
     // 폭발 범위 계산
     const explosions = [];
     explosions.push({ x: bomb.x, y: bomb.y });
@@ -511,20 +556,23 @@ async function explodeBomb(bomb) {
     checkPlayerHit(explosions);
 
     // 서버에 업데이트
-    const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
-    await updateDB(gameRef, {
-        bombs: gameState.bombs.reduce((acc, b) => ({ ...acc, [b.id]: b }), {}),
-        explosions: gameState.explosions.reduce((acc, e) => ({ ...acc, [e.id]: e }), {}),
-        map: gameState.map,
+    const mapRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/map`);
+    await set(mapRef, gameState.map);
+
+    const explosionRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/explosions/${explosionId}`);
+    await set(explosionRef, {
+        id: explosionId,
+        tiles: explosions,
+        createdAt: Date.now(),
     });
 
     // 폭발 이펙트 제거 (1000ms 후)
-    setTimeout(() => {
+    setTimeout(async () => {
         gameState.explosions = gameState.explosions.filter(e => e.id !== explosionId);
 
         // 서버에서도 폭발 제거
         const explosionsRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/explosions/${explosionId}`);
-        set(explosionsRef, null);
+        await set(explosionsRef, null);
     }, 1000);
 }
 
