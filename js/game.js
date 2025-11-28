@@ -625,7 +625,7 @@ function movePlayer() {
  * 폭탄 탈출 체크
  */
 async function checkBombEscape(player, oldX, oldY) {
-    const margin = 0.45; // 플레이어 충돌 박스 크기
+    const margin = 0.425; // 플레이어 충돌 박스 크기
 
     // 플레이어가 현재 위치에서 각 폭탄과 겹치는지 확인
     for (const bomb of gameState.bombs) {
@@ -668,7 +668,7 @@ async function checkBombEscape(player, oldX, oldY) {
  * 이동 가능한지 확인
  */
 function canMoveTo(x, y) {
-    const margin = 0.45; // 플레이어 크기의 절반 (타일의 90% 차지, 10% 여유로 부드러운 이동)
+    const margin = 0.425; // 플레이어 크기의 절반 (타일의 85% 차지, 15% 여유로 부드러운 이동)
 
     const player = gameState.players[gameState.playerId];
     if (!player) return false;
@@ -696,15 +696,16 @@ function canMoveTo(x, y) {
             return false;
         }
 
-        // 폭탄 체크: 탈출하지 않은 폭탄만 통과 가능
+        // 폭탄 체크
         if (tile === TILE.BOMB) {
             const bomb = gameState.bombs.find(b => b.x === tileX && b.y === tileY);
             if (bomb) {
-                // 이미 탈출한 플레이어는 재진입 불가
-                if (bomb.escapedPlayers && bomb.escapedPlayers.includes(player.id)) {
-                    return false;
+                // 본인이 설치한 폭탄이고 아직 탈출하지 않은 경우만 통과 가능
+                if (bomb.playerId === player.id && !bomb.escapedPlayers.includes(player.id)) {
+                    continue; // 통과 가능
                 }
-                // 탈출하지 않은 경우 통과 가능 (폭탄 설치 직후)
+                // 그 외의 경우 (다른 사람 폭탄 or 탈출 완료한 폭탄) 진입 불가
+                return false;
             }
         }
     }
@@ -1178,7 +1179,7 @@ function renderPlayers() {
 
         const px = player.x * CONFIG.TILE_SIZE;
         const py = player.y * CONFIG.TILE_SIZE;
-        const size = CONFIG.TILE_SIZE * 0.90; // 타일의 90% 크기 (10% 여유로 부드러운 이동)
+        const size = CONFIG.TILE_SIZE * 0.85; // 타일의 85% 크기 (15% 여유로 부드러운 이동)
 
         // 갇힌 플레이어는 물풍선 안에 표시
         if (player.trapped) {
