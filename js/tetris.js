@@ -126,35 +126,41 @@ async function init() {
         db = await getDatabase();
         roomRef = ref(db, `rooms/${gameId}/${roomId}`);
 
-        // 게임 상태 확인
-        const gameRef = ref(db, `rooms/${gameId}/${roomId}/game`);
-        const gameSnapshot = await get(gameRef);
-        const gameData = gameSnapshot.val();
+        try {
+            // 게임 상태 확인
+            const gameRef = ref(db, `rooms/${gameId}/${roomId}/game`);
+            const gameSnapshot = await get(gameRef);
+            const gameData = gameSnapshot.val();
 
-        if (gameData && gameData.players) {
-            // 살아있는 플레이어 수 확인 (본인 포함)
-            const alivePlayersBeforeDeath = Object.values(gameData.players).filter(p => p.alive);
-            const rank = alivePlayersBeforeDeath.length;
+            if (gameData && gameData.players) {
+                // 살아있는 플레이어 수 확인 (본인 포함) - 이게 꼴등 순위
+                const alivePlayers = Object.values(gameData.players).filter(p => p.alive);
+                const rank = alivePlayers.length; // 악용자의 순위 (꼴등)
 
-            // 플레이어를 사망 처리
-            const playerRef = ref(db, `rooms/${gameId}/${roomId}/game/players/${playerId}`);
-            try {
+                // 게임에서 사망 처리
+                const playerRef = ref(db, `rooms/${gameId}/${roomId}/game/players/${playerId}`);
                 await updateDB(playerRef, {
                     alive: false,
                     rank: rank,
                 });
 
-                // 남은 플레이어 수 확인
-                const alivePlayersAfterDeath = alivePlayersBeforeDeath.filter(p => p.id !== playerId);
+                // 방 플레이어 목록에서 제거
+                const roomPlayerRef = ref(db, `rooms/${gameId}/${roomId}/players/${playerId}`);
+                await remove(roomPlayerRef);
 
-                // 1명만 남았거나 모두 죽었으면 게임 종료 처리
-                if (alivePlayersAfterDeath.length <= 1) {
-                    if (alivePlayersAfterDeath.length === 1) {
-                        const winner = alivePlayersAfterDeath[0];
+                // 남은 생존자 확인 (악용자 제외)
+                const remainingAlive = alivePlayers.filter(p => p.id !== playerId);
+
+                // 남은 생존자가 1명 이하면 게임 종료
+                if (remainingAlive.length <= 1) {
+                    if (remainingAlive.length === 1) {
+                        // 마지막 생존자에게 1등 부여
+                        const winner = remainingAlive[0];
                         const winnerRef = ref(db, `rooms/${gameId}/${roomId}/game/players/${winner.id}`);
                         await updateDB(winnerRef, { rank: 1 });
                     }
 
+                    // 최종 순위 생성
                     const rankings = Object.values(gameData.players)
                         .map(p => p.id === playerId ? {...p, alive: false, rank: rank} : p)
                         .sort((a, b) => a.rank - b.rank)
@@ -165,9 +171,10 @@ async function init() {
                         rankings: rankings,
                     });
                 }
-            } catch (error) {
-                console.error('패배 처리 실패:', error);
+                // 남은 생존자가 2명 이상이면 게임 계속 진행 (아무 처리 안 함)
             }
+        } catch (error) {
+            console.error('패배 처리 실패:', error);
         }
 
         // 플래그 제거 후 로비로 이동
@@ -376,38 +383,49 @@ function setupEventListeners() {
     window.addEventListener('beforeunload', async (e) => {
         // 게임 진행 중이고 아직 살아있는 경우 실격 처리
         if (!gameState.gameOver && gameState.players[gameState.playerId]?.alive) {
-            // 죽기 전 살아있는 플레이어 수 확인 (본인 포함)
-            const alivePlayersBeforeDeath = Object.values(gameState.players).filter(p => p.alive);
-            const rank = alivePlayersBeforeDeath.length;
+            try {
+                // 살아있는 플레이어 수 확인 (본인 포함) - 이게 꼴등 순위
+                const alivePlayers = Object.values(gameState.players).filter(p => p.alive);
+                const rank = alivePlayers.length; // 악용자의 순위 (꼴등)
 
-            // 서버에 사망 상태 업데이트
-            const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${gameState.playerId}`);
-            await updateDB(playerRef, {
-                alive: false,
-                rank: rank,
-            });
-
-            // 남은 플레이어 수 확인
-            const alivePlayersAfterDeath = alivePlayersBeforeDeath.filter(p => p.id !== gameState.playerId);
-
-            // 1명만 남았거나 모두 죽었으면 호스트가 게임 종료 처리
-            if (alivePlayersAfterDeath.length <= 1 && gameState.isHost) {
-                if (alivePlayersAfterDeath.length === 1) {
-                    const winner = alivePlayersAfterDeath[0];
-                    const winnerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${winner.id}`);
-                    await updateDB(winnerRef, { rank: 1 });
-                }
-
-                const rankings = Object.values(gameState.players)
-                    .map(p => p.id === gameState.playerId ? {...p, alive: false, rank: rank} : p)
-                    .sort((a, b) => a.rank - b.rank)
-                    .map(p => ({ id: p.id, name: p.name, rank: p.rank, score: p.score }));
-
-                const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
-                await updateDB(gameRef, {
-                    gameFinished: true,
-                    rankings: rankings,
+                // 게임에서 사망 처리
+                const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${gameState.playerId}`);
+                await updateDB(playerRef, {
+                    alive: false,
+                    rank: rank,
                 });
+
+                // 방 플레이어 목록에서 제거
+                const roomPlayerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/players/${gameState.playerId}`);
+                await remove(roomPlayerRef);
+
+                // 남은 생존자 확인 (악용자 제외)
+                const remainingAlive = alivePlayers.filter(p => p.id !== gameState.playerId);
+
+                // 남은 생존자가 1명 이하면 게임 종료
+                if (remainingAlive.length <= 1) {
+                    if (remainingAlive.length === 1) {
+                        // 마지막 생존자에게 1등 부여
+                        const winner = remainingAlive[0];
+                        const winnerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${winner.id}`);
+                        await updateDB(winnerRef, { rank: 1 });
+                    }
+
+                    // 최종 순위 생성
+                    const rankings = Object.values(gameState.players)
+                        .map(p => p.id === gameState.playerId ? {...p, alive: false, rank: rank} : p)
+                        .sort((a, b) => a.rank - b.rank)
+                        .map(p => ({ id: p.id, name: p.name, rank: p.rank, score: p.score }));
+
+                    const gameRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game`);
+                    await updateDB(gameRef, {
+                        gameFinished: true,
+                        rankings: rankings,
+                    });
+                }
+                // 남은 생존자가 2명 이상이면 게임 계속 진행
+            } catch (error) {
+                console.error('페이지 이탈 처리 실패:', error);
             }
         }
     });
