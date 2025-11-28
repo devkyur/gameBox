@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오목 - GameBox</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        #game-container {
+            display: grid;
+            grid-template-columns: 250px 1fr 250px;
+            gap: 20px;
+            justify-content: center;
+            align-items: flex-start;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* 중앙: 바둑판 */
+        #main-game {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        #game-canvas {
+            border: 4px solid #8B4513;
+            border-radius: 8px;
+            background: #DEB887;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+        }
+
+        /* 플레이어 정보 */
+        .player-info-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 3px solid #DFE6E9;
+            text-align: center;
+        }
+
+        .player-info-box.current-turn {
+            border-color: #00B894;
+            box-shadow: 0 0 15px rgba(0, 184, 148, 0.5);
+        }
+
+        .player-info-box h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+        }
+
+        .stone-preview {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 15px auto;
+            border: 3px solid #2D3436;
+        }
+
+        .stone-black {
+            background: radial-gradient(circle at 30% 30%, #4a4a4a, #000);
+        }
+
+        .stone-white {
+            background: radial-gradient(circle at 30% 30%, #fff, #d0d0d0);
+        }
+
+        .timer {
+            background: #2D3436;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .turn-indicator {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .turn-indicator.my-turn {
+            background: #00B894;
+            color: white;
+            border-color: #00B894;
+        }
+
+        #game-over-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #game-over-modal.show {
+            display: flex;
+        }
+
+        .game-over-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .game-over-content h2 {
+            margin: 0 0 20px 0;
+            font-size: 32px;
+            color: #2D3436;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .game-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #DFE6E9;
+        }
+
+        .game-info h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #F5F5F5;
+            font-size: 14px;
+        }
+
+        .info-value {
+            font-weight: bold;
+            color: #6C5CE7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="game-title">⚫⚪ 오목 대전</h1>
+            <button class="btn btn-secondary back-btn" id="leave-game-btn" style="position: absolute; top: 20px; left: 20px;">
+                ← 나가기
+            </button>
+        </header>
+
+        <main>
+            <div id="game-container">
+                <!-- 왼쪽: 상대방 정보 -->
+                <div id="opponent-info">
+                    <div class="player-info-box" id="opponent-box">
+                        <h3 id="opponent-name">상대방</h3>
+                        <div class="stone-preview" id="opponent-stone"></div>
+                        <div id="opponent-status">대기 중...</div>
+                    </div>
+                </div>
+
+                <!-- 중앙: 바둑판 -->
+                <div id="main-game">
+                    <div class="timer" id="game-timer">0:00</div>
+                    <div class="turn-indicator" id="turn-indicator">게임 시작 대기...</div>
+                    <canvas id="game-canvas" width="570" height="570"></canvas>
+                </div>
+
+                <!-- 오른쪽: 내 정보 -->
+                <div id="my-info">
+                    <div class="player-info-box" id="my-box">
+                        <h3 id="my-name">나</h3>
+                        <div class="stone-preview" id="my-stone"></div>
+                        <div id="my-status">준비 중...</div>
+                    </div>
+
+                    <div class="game-info">
+                        <h3>📊 게임 정보</h3>
+                        <div class="info-item">
+                            <span>놓은 돌</span>
+                            <span class="info-value" id="stone-count">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span>남은 수</span>
+                            <span class="info-value" id="remaining-moves">225</span>
+                        </div>
+                    </div>
+
+                    <div class="game-info">
+                        <h3>⌨️ 조작법</h3>
+                        <div style="font-size: 14px; line-height: 2;">
+                            <div><strong>마우스</strong> - 돌 놓기</div>
+                            <div>빈 칸을 클릭하여 돌을 배치하세요</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 게임 종료 모달 -->
+    <div id="game-over-modal">
+        <div class="game-over-content">
+            <h2 id="game-result">🎉 게임 종료!</h2>
+            <div id="winner-name" style="font-size: 24px; margin: 20px 0; font-weight: bold;"></div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" id="return-lobby-btn" style="flex: 1;">로비로</button>
+                <button class="btn btn-primary" id="restart-game-btn" style="flex: 1;">다시하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/omok.js"></script>
+</body>
+</html>

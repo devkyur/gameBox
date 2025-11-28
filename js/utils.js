@@ -16,12 +16,11 @@ export const GAMES = {
         description: '블록을 쌓아 라인을 완성하세요',
         color: 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)'
     },
-    'fighting': {
-        id: 'fighting',
-        name: '철권',
-        description: '격투 게임',
-        color: 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
-        disabled: true
+    'omok': {
+        id: 'omok',
+        name: '오목',
+        description: '5개를 먼저 연결하세요!',
+        color: 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)'
     },
     'mini-games': {
         id: 'mini-games',
