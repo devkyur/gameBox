@@ -20,7 +20,7 @@ const CONFIG = {
 const STONE_COLOR = {
     BLACK: 'black',
     WHITE: 'white',
-    EMPTY: null
+    EMPTY: 0  // Firebase는 null을 저장하지 않으므로 0 사용
 };
 
 // ========== 상태 ==========
@@ -133,6 +133,44 @@ function initBoard() {
     }
 }
 
+// ========== 보드 평탄화 (Firebase 저장용) ==========
+function flattenBoard(board) {
+    const flat = [];
+    for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
+        for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
+            flat.push(board[y][x]);
+        }
+    }
+    return flat;
+}
+
+// ========== 보드 복원 (Firebase에서 읽기) ==========
+function unflattenBoard(flat) {
+    if (!flat || !Array.isArray(flat)) {
+        // 데이터가 없으면 빈 보드 반환
+        const board = [];
+        for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
+            const row = [];
+            for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
+                row.push(STONE_COLOR.EMPTY);
+            }
+            board.push(row);
+        }
+        return board;
+    }
+
+    const board = [];
+    for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
+        const row = [];
+        for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
+            const index = y * CONFIG.BOARD_SIZE + x;
+            row.push(flat[index] || STONE_COLOR.EMPTY);
+        }
+        board.push(row);
+    }
+    return board;
+}
+
 // ========== Firebase 게임 상태 업데이트 핸들러 ==========
 function handleGameStateUpdate(snapshot) {
     const data = snapshot.val();
@@ -167,9 +205,9 @@ function handleGameStateUpdate(snapshot) {
         }
     }
 
-    // 보드 상태 동기화
+    // 보드 상태 동기화 (평탄화된 배열을 2차원 배열로 복원)
     if (data.board) {
-        gameState.board = data.board;
+        gameState.board = unflattenBoard(data.board);
         gameState.stoneCount = countStones();
         stoneCountElement.textContent = gameState.stoneCount;
         remainingMovesElement.textContent = CONFIG.BOARD_SIZE * CONFIG.BOARD_SIZE - gameState.stoneCount;
@@ -230,20 +268,20 @@ async function initializeGame() {
             }
         };
 
-        // 빈 보드 생성
-        const board = [];
+        // 빈 보드 생성 (2차원 배열)
+        const board2D = [];
         for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
             const row = [];
             for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
                 row.push(STONE_COLOR.EMPTY);
             }
-            board.push(row);
+            board2D.push(row);
         }
 
-        // 게임 상태 초기화
+        // 게임 상태 초기화 (보드는 평탄화해서 저장)
         await set(gameRef, {
             players: players,
-            board: board,
+            board: flattenBoard(board2D),
             currentTurn: 'black',
             turnStartTime: Date.now(),
             gameOver: false,
@@ -408,7 +446,7 @@ async function placeStone(x, y) {
         const nextTurn = gameState.currentTurn === 'black' ? 'white' : 'black';
 
         const updates = {
-            board: newBoard,
+            board: flattenBoard(newBoard),  // 평탄화해서 저장
             currentTurn: nextTurn,
             turnStartTime: Date.now()
         };
