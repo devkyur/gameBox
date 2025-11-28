@@ -29,6 +29,7 @@ const gameState = {
     gameId: null,
     playerId: null,
     playerName: null,
+    isHost: false,          // 호스트 여부
     myColor: null,          // 'black' or 'white'
     opponentId: null,
     opponentName: null,
@@ -97,13 +98,13 @@ async function init() {
         roomRef = ref(db, `rooms/omok/${gameState.roomId}`);
         gameRef = ref(db, `rooms/omok/${gameState.roomId}/game`);
 
-        // 게임 상태 감지
-        onValue(gameRef, handleGameStateUpdate);
-
         // F5 방지 (게임 진행 중 표시)
         localStorage.setItem('game_in_progress', 'true');
         localStorage.setItem('current_room_id', gameState.roomId);
         localStorage.setItem('current_game_id', 'omok');
+
+        // Firebase 동기화 설정
+        setupFirebaseSync();
 
     } catch (error) {
         console.error('Firebase 초기화 실패:', error);
@@ -181,81 +182,92 @@ function decodeBoard(sparse) {
     return board;
 }
 
-// ========== Firebase 게임 상태 업데이트 핸들러 ==========
-function handleGameStateUpdate(snapshot) {
-    const data = snapshot.val();
-    if (!data) {
-        // 게임 상태가 없으면 초기화 (호스트만)
-        initializeGame();
-        return;
-    }
-
-    // 플레이어 색상 할당
-    if (data.players) {
-        const playerIds = Object.keys(data.players);
-        const myData = data.players[gameState.playerId];
-
-        if (myData) {
-            gameState.myColor = myData.color;
-            myStoneElement.className = `stone-preview stone-${myData.color}`;
-            myStatusElement.textContent = myData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+// ========== Firebase 동기화 설정 ==========
+function setupFirebaseSync() {
+    // room 리스너 (Crazy Arcade 방식)
+    onValue(roomRef, (snapshot) => {
+        const roomData = snapshot.val();
+        if (!roomData) {
+            showNotification('방이 존재하지 않습니다.', 'error');
+            setTimeout(() => URLParams.navigate('lobby.html', { game: 'omok' }), 2000);
+            return;
         }
 
-        // 상대방 정보
-        const opponentId = playerIds.find(id => id !== gameState.playerId);
-        if (opponentId) {
-            gameState.opponentId = opponentId;
-            const opponentData = data.players[opponentId];
-            gameState.opponentName = opponentData.name;
-            gameState.opponentColor = opponentData.color;
+        // 호스트 확인
+        gameState.isHost = roomData.hostId === gameState.playerId;
 
-            opponentNameElement.textContent = opponentData.name;
-            opponentStoneElement.className = `stone-preview stone-${opponentData.color}`;
-            opponentStatusElement.textContent = opponentData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+        // 호스트가 game 데이터 없으면 초기화 (Crazy Arcade 패턴!)
+        if (gameState.isHost && !roomData.game) {
+            initializeGame();
         }
-    }
+    });
 
-    // 보드 상태 동기화 (문자열을 2차원 배열로 디코딩)
-    if (data.board) {
-        gameState.board = decodeBoard(data.board);
-        gameState.stoneCount = countStones();
-        stoneCountElement.textContent = gameState.stoneCount;
-        remainingMovesElement.textContent = CONFIG.BOARD_SIZE * CONFIG.BOARD_SIZE - gameState.stoneCount;
-    }
+    // game 리스너 (별도)
+    onValue(gameRef, (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
 
-    // 현재 턴
-    if (data.currentTurn) {
-        gameState.currentTurn = data.currentTurn;
-        gameState.turnStartTime = data.turnStartTime || Date.now();
-        updateTurnIndicator();
-    }
+        // 플레이어 색상 할당
+        if (data.players) {
+            const playerIds = Object.keys(data.players);
+            const myData = data.players[gameState.playerId];
 
-    // 게임 오버
-    if (data.gameOver) {
-        gameState.gameOver = true;
-        gameState.winner = data.winner;
-        showGameOver();
-    }
+            if (myData) {
+                gameState.myColor = myData.color;
+                myStoneElement.className = `stone-preview stone-${myData.color}`;
+                myStatusElement.textContent = myData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+            }
 
-    // 화면 다시 그리기
-    drawBoard();
+            // 상대방 정보
+            const opponentId = playerIds.find(id => id !== gameState.playerId);
+            if (opponentId) {
+                gameState.opponentId = opponentId;
+                const opponentData = data.players[opponentId];
+                gameState.opponentName = opponentData.name;
+                gameState.opponentColor = opponentData.color;
+
+                opponentNameElement.textContent = opponentData.name;
+                opponentStoneElement.className = `stone-preview stone-${opponentData.color}`;
+                opponentStatusElement.textContent = opponentData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+            }
+        }
+
+        // 보드 상태 동기화
+        if (data.board !== undefined) {
+            gameState.board = decodeBoard(data.board);
+            gameState.stoneCount = countStones();
+            stoneCountElement.textContent = gameState.stoneCount;
+            remainingMovesElement.textContent = CONFIG.BOARD_SIZE * CONFIG.BOARD_SIZE - gameState.stoneCount;
+        }
+
+        // 현재 턴
+        if (data.currentTurn) {
+            gameState.currentTurn = data.currentTurn;
+            gameState.turnStartTime = data.turnStartTime || Date.now();
+            updateTurnIndicator();
+        }
+
+        // 게임 오버
+        if (data.gameOver) {
+            gameState.gameOver = true;
+            gameState.winner = data.winner;
+            showGameOver();
+        }
+
+        // 화면 다시 그리기
+        drawBoard();
+    });
 }
 
 // ========== 게임 초기화 (호스트만 실행) ==========
 async function initializeGame() {
     try {
-        // 방 정보 확인
-        const roomSnapshot = await new Promise((resolve) => {
-            onValue(roomRef, (snapshot) => {
-                resolve(snapshot);
-            }, { onlyOnce: true });
-        });
-
+        // get()을 사용하여 한 번만 읽기 (onValue 중첩 방지!)
+        const { get } = await import('https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js');
+        const roomSnapshot = await get(roomRef);
         const roomData = roomSnapshot.val();
-        if (!roomData) return;
 
-        // 호스트만 초기화
-        if (roomData.hostId !== gameState.playerId) return;
+        if (!roomData) return;
 
         const playerIds = Object.keys(roomData.players || {});
         if (playerIds.length !== 2) {
