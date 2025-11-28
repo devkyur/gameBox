@@ -648,7 +648,7 @@ async function checkBombEscape(player, oldX, oldY) {
  * 이동 가능한지 확인
  */
 function canMoveTo(x, y) {
-    const margin = 0.45; // 플레이어 크기의 절반 (복도 통과 가능하도록 여유 확보)
+    const margin = 0.475; // 플레이어 크기의 절반 (타일의 95% 차지, 5% 여유로 미세 충돌 허용)
 
     const player = gameState.players[gameState.playerId];
     if (!player) return false;
@@ -1158,7 +1158,7 @@ function renderPlayers() {
 
         const px = player.x * CONFIG.TILE_SIZE;
         const py = player.y * CONFIG.TILE_SIZE;
-        const size = CONFIG.TILE_SIZE * 0.96; // 거의 타일 크기와 동일하게
+        const size = CONFIG.TILE_SIZE * 0.95; // 타일의 95% 크기 (5% 여유로 복도 통과)
 
         // 갇힌 플레이어는 물풍선 안에 표시
         if (player.trapped) {
