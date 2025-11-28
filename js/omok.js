@@ -133,29 +133,30 @@ function initBoard() {
     }
 }
 
-// ========== 보드 평탄화 (Firebase 저장용) ==========
-// Firebase는 문자열과 숫자가 섞인 배열을 처리할 때 순환 참조 문제 발생
-// 따라서 숫자로만 인코딩: 0=빈칸, 1=흑돌, 2=백돌
-function flattenBoard(board) {
-    const flat = [];
+// ========== 보드 인코딩 (Firebase 저장용) ==========
+// Firebase 배열 순환 참조 문제를 피하기 위해 문자열로 인코딩
+// 문자열 형식: "000012000..." (길이 225, 각 문자는 0/1/2)
+// 0=빈칸, 1=흑돌, 2=백돌
+function encodeBoard(board) {
+    let encoded = '';
     for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
         for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
             const cell = board[y][x];
             if (cell === 'black') {
-                flat.push(1);
+                encoded += '1';
             } else if (cell === 'white') {
-                flat.push(2);
+                encoded += '2';
             } else {
-                flat.push(0);
+                encoded += '0';
             }
         }
     }
-    return flat;
+    return encoded;
 }
 
-// ========== 보드 복원 (Firebase에서 읽기) ==========
-function unflattenBoard(flat) {
-    if (!flat || !Array.isArray(flat)) {
+// ========== 보드 디코딩 (Firebase에서 읽기) ==========
+function decodeBoard(encoded) {
+    if (!encoded || typeof encoded !== 'string') {
         // 데이터가 없으면 빈 보드 반환
         const board = [];
         for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
@@ -173,11 +174,11 @@ function unflattenBoard(flat) {
         const row = [];
         for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
             const index = y * CONFIG.BOARD_SIZE + x;
-            const code = flat[index] || 0;
-            // 숫자 코드를 문자열로 변환: 0=빈칸, 1=흑돌, 2=백돌
-            if (code === 1) {
+            const char = encoded[index] || '0';
+            // 문자 코드를 값으로 변환
+            if (char === '1') {
                 row.push('black');
-            } else if (code === 2) {
+            } else if (char === '2') {
                 row.push('white');
             } else {
                 row.push(STONE_COLOR.EMPTY);
@@ -222,9 +223,9 @@ function handleGameStateUpdate(snapshot) {
         }
     }
 
-    // 보드 상태 동기화 (평탄화된 배열을 2차원 배열로 복원)
+    // 보드 상태 동기화 (문자열을 2차원 배열로 디코딩)
     if (data.board) {
-        gameState.board = unflattenBoard(data.board);
+        gameState.board = decodeBoard(data.board);
         gameState.stoneCount = countStones();
         stoneCountElement.textContent = gameState.stoneCount;
         remainingMovesElement.textContent = CONFIG.BOARD_SIZE * CONFIG.BOARD_SIZE - gameState.stoneCount;
@@ -295,10 +296,10 @@ async function initializeGame() {
             board2D.push(row);
         }
 
-        // 게임 상태 초기화 (보드는 평탄화해서 저장)
+        // 게임 상태 초기화 (보드는 문자열로 인코딩해서 저장)
         await set(gameRef, {
             players: players,
-            board: flattenBoard(board2D),
+            board: encodeBoard(board2D),
             currentTurn: 'black',
             turnStartTime: Date.now(),
             gameOver: false,
@@ -463,7 +464,7 @@ async function placeStone(x, y) {
         const nextTurn = gameState.currentTurn === 'black' ? 'white' : 'black';
 
         const updates = {
-            board: flattenBoard(newBoard),  // 평탄화해서 저장
+            board: encodeBoard(newBoard),  // 문자열로 인코딩해서 저장
             currentTurn: nextTurn,
             turnStartTime: Date.now()
         };

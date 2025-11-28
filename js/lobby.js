@@ -200,7 +200,12 @@ async function handleCreateRoom(e) {
     e.preventDefault();
 
     const title = roomTitleInput.value.trim();
-    const maxPlayers = maxPlayersSelect.value;
+    let maxPlayers = maxPlayersSelect.value;
+
+    // 오목은 1:1 게임이므로 최대 인원 2명 고정
+    if (currentGameId === 'omok') {
+        maxPlayers = 2;
+    }
 
     // 검증
     const validation = validateRoomTitle(title);
