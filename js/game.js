@@ -77,6 +77,38 @@ async function init() {
         return;
     }
 
+    // 새로고침 감지: 이미 게임이 진행 중이었는지 확인
+    const gameInProgressKey = `game_in_progress_${gameId}_${roomId}_${playerId}`;
+    const wasInGame = localStorage.getItem(gameInProgressKey);
+
+    if (wasInGame === 'true') {
+        // 새로고침으로 재입장 시도 - 자동 패배 처리
+        showNotification('새로고침으로 인해 자동 패배 처리됩니다.', 'error');
+
+        // Firebase 초기화
+        db = await getDatabase();
+        roomRef = ref(db, `rooms/${gameId}/${roomId}`);
+
+        // 플레이어를 사망 처리
+        const playerRef = ref(db, `rooms/${gameId}/${roomId}/game/players/${playerId}`);
+        try {
+            await updateDB(playerRef, {
+                alive: false,
+                trapped: false
+            });
+        } catch (error) {
+            console.error('패배 처리 실패:', error);
+        }
+
+        // 플래그 제거 후 로비로 이동
+        localStorage.removeItem(gameInProgressKey);
+        setTimeout(() => URLParams.navigate('lobby.html', { game: gameId }), 2000);
+        return;
+    }
+
+    // 게임 진행 중 플래그 설정
+    localStorage.setItem(gameInProgressKey, 'true');
+
     gameState.roomId = roomId;
     gameState.playerId = playerId;
     gameState.gameId = gameId;
@@ -415,6 +447,10 @@ async function resetGame() {
  */
 async function leaveRoomAndReturnToLobby() {
     try {
+        // 게임 진행 중 플래그 제거
+        const gameInProgressKey = `game_in_progress_${gameState.gameId}_${gameState.roomId}_${gameState.playerId}`;
+        localStorage.removeItem(gameInProgressKey);
+
         // 현재 방 상태 확인
         const snapshot = await get(roomRef);
         const roomData = snapshot.val();
@@ -837,6 +873,10 @@ function handleGameOver(winnerId) {
     if (gameState.gameOver) return;
 
     gameState.gameOver = true;
+
+    // 게임 진행 중 플래그 제거 (정상 종료)
+    const gameInProgressKey = `game_in_progress_${gameState.gameId}_${gameState.roomId}_${gameState.playerId}`;
+    localStorage.removeItem(gameInProgressKey);
 
     const modal = document.getElementById('game-over-modal');
     const winnerNameEl = document.getElementById('winner-name');

@@ -114,6 +114,71 @@ async function init() {
         return;
     }
 
+    // 새로고침 감지: 이미 게임이 진행 중이었는지 확인
+    const gameInProgressKey = `game_in_progress_${gameId}_${roomId}_${playerId}`;
+    const wasInGame = localStorage.getItem(gameInProgressKey);
+
+    if (wasInGame === 'true') {
+        // 새로고침으로 재입장 시도 - 자동 패배 처리
+        showNotification('새로고침으로 인해 자동 패배 처리됩니다.', 'error');
+
+        // Firebase 초기화
+        db = await getDatabase();
+        roomRef = ref(db, `rooms/${gameId}/${roomId}`);
+
+        // 게임 상태 확인
+        const gameRef = ref(db, `rooms/${gameId}/${roomId}/game`);
+        const gameSnapshot = await get(gameRef);
+        const gameData = gameSnapshot.val();
+
+        if (gameData && gameData.players) {
+            // 살아있는 플레이어 수 확인 (본인 포함)
+            const alivePlayersBeforeDeath = Object.values(gameData.players).filter(p => p.alive);
+            const rank = alivePlayersBeforeDeath.length;
+
+            // 플레이어를 사망 처리
+            const playerRef = ref(db, `rooms/${gameId}/${roomId}/game/players/${playerId}`);
+            try {
+                await updateDB(playerRef, {
+                    alive: false,
+                    rank: rank,
+                });
+
+                // 남은 플레이어 수 확인
+                const alivePlayersAfterDeath = alivePlayersBeforeDeath.filter(p => p.id !== playerId);
+
+                // 1명만 남았거나 모두 죽었으면 게임 종료 처리
+                if (alivePlayersAfterDeath.length <= 1) {
+                    if (alivePlayersAfterDeath.length === 1) {
+                        const winner = alivePlayersAfterDeath[0];
+                        const winnerRef = ref(db, `rooms/${gameId}/${roomId}/game/players/${winner.id}`);
+                        await updateDB(winnerRef, { rank: 1 });
+                    }
+
+                    const rankings = Object.values(gameData.players)
+                        .map(p => p.id === playerId ? {...p, alive: false, rank: rank} : p)
+                        .sort((a, b) => a.rank - b.rank)
+                        .map(p => ({ id: p.id, name: p.name, rank: p.rank, score: p.score }));
+
+                    await updateDB(gameRef, {
+                        gameFinished: true,
+                        rankings: rankings,
+                    });
+                }
+            } catch (error) {
+                console.error('패배 처리 실패:', error);
+            }
+        }
+
+        // 플래그 제거 후 로비로 이동
+        localStorage.removeItem(gameInProgressKey);
+        setTimeout(() => URLParams.navigate('lobby.html', { game: gameId }), 2000);
+        return;
+    }
+
+    // 게임 진행 중 플래그 설정
+    localStorage.setItem(gameInProgressKey, 'true');
+
     gameState.roomId = roomId;
     gameState.playerId = playerId;
     gameState.gameId = gameId;
@@ -385,6 +450,10 @@ async function resetGame() {
  */
 async function leaveRoomAndReturnToLobby() {
     try {
+        // 게임 진행 중 플래그 제거
+        const gameInProgressKey = `game_in_progress_${gameState.gameId}_${gameState.roomId}_${gameState.playerId}`;
+        localStorage.removeItem(gameInProgressKey);
+
         // 현재 방 상태 확인
         const snapshot = await get(roomRef);
         const roomData = snapshot.val();
@@ -806,6 +875,10 @@ function handleGameOver(rankings) {
 
     gameState.gameOver = true;
     gameState.rankings = rankings;
+
+    // 게임 진행 중 플래그 제거 (정상 종료)
+    const gameInProgressKey = `game_in_progress_${gameState.gameId}_${gameState.roomId}_${gameState.playerId}`;
+    localStorage.removeItem(gameInProgressKey);
 
     const modal = document.getElementById('game-over-modal');
     const finalRanking = document.getElementById('final-ranking');
