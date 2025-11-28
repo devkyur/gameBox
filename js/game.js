@@ -174,8 +174,8 @@ function initMap() {
             if (x === 0 || x === CONFIG.MAP_WIDTH - 1 || y === 0 || y === CONFIG.MAP_HEIGHT - 1) {
                 row.push(TILE.SOLID_WALL);
             }
-            // 짝수 행, 짝수 열에 단단한 벽 (크레이지 아케이드 스타일)
-            else if (x % 2 === 0 && y % 2 === 0) {
+            // 네 모서리에만 검은 블럭 배치 (좌상, 우상, 좌하, 우하)
+            else if ((x === 2 && y === 2) || (x === 10 && y === 2) || (x === 2 && y === 8) || (x === 10 && y === 8)) {
                 row.push(TILE.SOLID_WALL);
             }
             // 플레이어 시작 위치 주변은 비워둠
@@ -309,7 +309,12 @@ function setupFirebaseSync() {
 
             // 폭탄 동기화
             if (gameData.bombs && typeof gameData.bombs === 'object') {
-                gameState.bombs = Object.values(gameData.bombs).filter(b => b !== null);
+                gameState.bombs = Object.values(gameData.bombs)
+                    .filter(b => b !== null)
+                    .map(b => ({
+                        ...b,
+                        escapedPlayers: b.escapedPlayers || [] // escapedPlayers 초기화
+                    }));
             } else {
                 gameState.bombs = [];
             }
@@ -574,13 +579,36 @@ function movePlayer() {
         moved = true;
     }
 
-    // 충돌 체크
+    const oldX = player.x;
+    const oldY = player.y;
+
+    // 충돌 체크 - X와 Y를 독립적으로 체크하여 부드러운 슬라이딩 구현
     if (canMoveTo(newX, player.y)) {
         player.x = newX;
+    } else if (newX !== player.x) {
+        // X 방향 막힘 - Y 방향으로 슬라이딩 시도 (벽에 살짝 비비면 미끄러지듯 이동)
+        const slideAmount = 0.1;
+        if (keys.ArrowUp || keys.ArrowDown) {
+            if (canMoveTo(player.x, newY)) {
+                player.y = newY;
+            }
+        }
     }
+
     if (canMoveTo(player.x, newY)) {
         player.y = newY;
+    } else if (newY !== player.y) {
+        // Y 방향 막힘 - X 방향으로 슬라이딩 시도
+        const slideAmount = 0.1;
+        if (keys.ArrowLeft || keys.ArrowRight) {
+            if (canMoveTo(newX, player.y) && player.x === oldX) {
+                player.x = newX;
+            }
+        }
     }
+
+    // 폭탄 탈출 체크
+    checkBombEscape(player, oldX, oldY);
 
     // 아이템 획득 체크
     checkItemPickup(player);
@@ -594,15 +622,36 @@ function movePlayer() {
 }
 
 /**
+ * 폭탄 탈출 체크
+ */
+async function checkBombEscape(player, oldX, oldY) {
+    const oldCenterTileX = Math.floor(oldX);
+    const oldCenterTileY = Math.floor(oldY);
+    const newCenterTileX = Math.floor(player.x);
+    const newCenterTileY = Math.floor(player.y);
+
+    // 타일이 변경되었는지 확인
+    if (oldCenterTileX !== newCenterTileX || oldCenterTileY !== newCenterTileY) {
+        // 이전 타일에 폭탄이 있었다면 탈출 처리
+        const bomb = gameState.bombs.find(b => b.x === oldCenterTileX && b.y === oldCenterTileY);
+        if (bomb && !bomb.escapedPlayers.includes(player.id)) {
+            bomb.escapedPlayers.push(player.id);
+
+            // Firebase에 탈출 상태 업데이트
+            const bombRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/bombs/${bomb.id}/escapedPlayers`);
+            await set(bombRef, bomb.escapedPlayers);
+        }
+    }
+}
+
+/**
  * 이동 가능한지 확인
  */
 function canMoveTo(x, y) {
     const margin = 0.45; // 플레이어 크기의 절반 (복도 통과 가능하도록 여유 확보)
 
-    // 현재 플레이어의 중심 타일 위치 (폭탄을 놓은 타일에서 빠져나오기 위함)
     const player = gameState.players[gameState.playerId];
-    const currentCenterTileX = player ? Math.floor(player.x) : -1;
-    const currentCenterTileY = player ? Math.floor(player.y) : -1;
+    if (!player) return false;
 
     // 네 모서리 체크
     const corners = [
@@ -627,14 +676,15 @@ function canMoveTo(x, y) {
             return false;
         }
 
-        // 폭탄 체크: 현재 서 있는 타일의 폭탄은 통과 가능 (폭탄 설치 후 빠져나오기 위함)
+        // 폭탄 체크: 탈출하지 않은 폭탄만 통과 가능
         if (tile === TILE.BOMB) {
-            if (tileX === currentCenterTileX && tileY === currentCenterTileY) {
-                // 현재 서 있는 타일의 폭탄은 통과 가능
-                continue;
-            } else {
-                // 다른 타일의 폭탄은 통과 불가
-                return false;
+            const bomb = gameState.bombs.find(b => b.x === tileX && b.y === tileY);
+            if (bomb) {
+                // 이미 탈출한 플레이어는 재진입 불가
+                if (bomb.escapedPlayers && bomb.escapedPlayers.includes(player.id)) {
+                    return false;
+                }
+                // 탈출하지 않은 경우 통과 가능 (폭탄 설치 직후)
             }
         }
     }
@@ -678,6 +728,7 @@ async function placeBomb() {
         playerId: player.id,
         power: player.bombPower,
         placedAt: Date.now(),
+        escapedPlayers: [], // 폭탄에서 탈출한 플레이어 목록
     };
 
     gameState.bombs.push(bomb);
