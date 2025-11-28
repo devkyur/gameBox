@@ -161,6 +161,7 @@ function updateUI(roomData) {
             const gameHtmlMap = {
                 'crazy-arcade': 'game.html',
                 'tetris': 'tetris.html',
+                'omok': 'omok.html',
             };
             const gameHtml = gameHtmlMap[currentGameId] || 'game.html';
             URLParams.navigate(gameHtml, { room: currentRoomId });
@@ -304,6 +305,7 @@ async function startGame() {
             const gameHtmlMap = {
                 'crazy-arcade': 'game.html',
                 'tetris': 'tetris.html',
+                'omok': 'omok.html',
             };
             const gameHtml = gameHtmlMap[currentGameId] || 'game.html';
             URLParams.navigate(gameHtml, { room: currentRoomId });
