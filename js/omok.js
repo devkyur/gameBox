@@ -134,11 +134,20 @@ function initBoard() {
 }
 
 // ========== 보드 평탄화 (Firebase 저장용) ==========
+// Firebase는 문자열과 숫자가 섞인 배열을 처리할 때 순환 참조 문제 발생
+// 따라서 숫자로만 인코딩: 0=빈칸, 1=흑돌, 2=백돌
 function flattenBoard(board) {
     const flat = [];
     for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
         for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
-            flat.push(board[y][x]);
+            const cell = board[y][x];
+            if (cell === 'black') {
+                flat.push(1);
+            } else if (cell === 'white') {
+                flat.push(2);
+            } else {
+                flat.push(0);
+            }
         }
     }
     return flat;
@@ -164,7 +173,15 @@ function unflattenBoard(flat) {
         const row = [];
         for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
             const index = y * CONFIG.BOARD_SIZE + x;
-            row.push(flat[index] || STONE_COLOR.EMPTY);
+            const code = flat[index] || 0;
+            // 숫자 코드를 문자열로 변환: 0=빈칸, 1=흑돌, 2=백돌
+            if (code === 1) {
+                row.push('black');
+            } else if (code === 2) {
+                row.push('white');
+            } else {
+                row.push(STONE_COLOR.EMPTY);
+            }
         }
         board.push(row);
     }
