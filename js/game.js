@@ -597,7 +597,12 @@ function movePlayer() {
  * 이동 가능한지 확인
  */
 function canMoveTo(x, y) {
-    const margin = 0.48; // 플레이어 크기의 절반 (거의 타일 크기와 동일)
+    const margin = 0.45; // 플레이어 크기의 절반 (복도 통과 가능하도록 여유 확보)
+
+    // 현재 플레이어의 중심 타일 위치 (폭탄을 놓은 타일에서 빠져나오기 위함)
+    const player = gameState.players[gameState.playerId];
+    const currentCenterTileX = player ? Math.floor(player.x) : -1;
+    const currentCenterTileY = player ? Math.floor(player.y) : -1;
 
     // 네 모서리 체크
     const corners = [
@@ -616,8 +621,21 @@ function canMoveTo(x, y) {
         }
 
         const tile = gameState.map[tileY][tileX];
-        if (tile === TILE.SOLID_WALL || tile === TILE.BREAKABLE_WALL || tile === TILE.BOMB) {
+
+        // 벽 체크
+        if (tile === TILE.SOLID_WALL || tile === TILE.BREAKABLE_WALL) {
             return false;
+        }
+
+        // 폭탄 체크: 현재 서 있는 타일의 폭탄은 통과 가능 (폭탄 설치 후 빠져나오기 위함)
+        if (tile === TILE.BOMB) {
+            if (tileX === currentCenterTileX && tileY === currentCenterTileY) {
+                // 현재 서 있는 타일의 폭탄은 통과 가능
+                continue;
+            } else {
+                // 다른 타일의 폭탄은 통과 불가
+                return false;
+            }
         }
     }
 
