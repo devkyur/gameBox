@@ -656,9 +656,15 @@ async function playerDied() {
     gameState.gameOver = true;
     gameState.currentPiece = null;
 
-    // 살아있는 플레이어 수 확인
-    const alivePlayers = Object.values(gameState.players).filter(p => p.alive);
-    const rank = alivePlayers.length + 1; // 현재 순위
+    // 죽기 전 살아있는 플레이어 수 확인 (본인 포함)
+    const alivePlayersBeforeDeath = Object.values(gameState.players).filter(p => p.alive);
+    const rank = alivePlayersBeforeDeath.length; // 현재 순위 (죽기 전 살아있던 플레이어 수)
+
+    // 본인 상태 업데이트 (먼저 로컬에서)
+    if (gameState.players[gameState.playerId]) {
+        gameState.players[gameState.playerId].alive = false;
+        gameState.players[gameState.playerId].rank = rank;
+    }
 
     // 서버에 사망 상태 업데이트
     const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${gameState.playerId}`);
@@ -667,16 +673,24 @@ async function playerDied() {
         rank: rank,
     });
 
-    // 본인 상태 업데이트
-    if (gameState.players[gameState.playerId]) {
-        gameState.players[gameState.playerId].alive = false;
-        gameState.players[gameState.playerId].rank = rank;
-    }
-
     showNotification(`${rank}등으로 탈락했습니다!`, 'error');
 
-    // 1명만 남았으면 게임 종료
-    if (alivePlayers.length === 1 && gameState.isHost) {
+    // 남은 플레이어 수 확인 (본인이 죽은 후)
+    const alivePlayersAfterDeath = Object.values(gameState.players).filter(p => p.alive);
+
+    // 1명만 남았거나 모두 죽었으면 게임 종료
+    if (alivePlayersAfterDeath.length <= 1 && gameState.isHost) {
+        // 마지막 생존자에게 1등 부여
+        if (alivePlayersAfterDeath.length === 1) {
+            const winner = alivePlayersAfterDeath[0];
+            const winnerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${winner.id}`);
+            await updateDB(winnerRef, {
+                rank: 1,
+            });
+            if (gameState.players[winner.id]) {
+                gameState.players[winner.id].rank = 1;
+            }
+        }
         await finishGame();
     }
 }
