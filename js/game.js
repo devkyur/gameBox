@@ -625,16 +625,36 @@ function movePlayer() {
  * 폭탄 탈출 체크
  */
 async function checkBombEscape(player, oldX, oldY) {
-    const oldCenterTileX = Math.floor(oldX);
-    const oldCenterTileY = Math.floor(oldY);
-    const newCenterTileX = Math.floor(player.x);
-    const newCenterTileY = Math.floor(player.y);
+    const margin = 0.45; // 플레이어 충돌 박스 크기
 
-    // 타일이 변경되었는지 확인
-    if (oldCenterTileX !== newCenterTileX || oldCenterTileY !== newCenterTileY) {
-        // 이전 타일에 폭탄이 있었다면 탈출 처리
-        const bomb = gameState.bombs.find(b => b.x === oldCenterTileX && b.y === oldCenterTileY);
-        if (bomb && !bomb.escapedPlayers.includes(player.id)) {
+    // 플레이어가 현재 위치에서 각 폭탄과 겹치는지 확인
+    for (const bomb of gameState.bombs) {
+        // 이미 탈출한 폭탄은 건너뛰기
+        if (bomb.escapedPlayers && bomb.escapedPlayers.includes(player.id)) {
+            continue;
+        }
+
+        // 폭탄 타일의 범위
+        const bombLeft = bomb.x;
+        const bombRight = bomb.x + 1;
+        const bombTop = bomb.y;
+        const bombBottom = bomb.y + 1;
+
+        // 플레이어의 충돌 박스 범위
+        const playerLeft = player.x - margin;
+        const playerRight = player.x + margin;
+        const playerTop = player.y - margin;
+        const playerBottom = player.y + margin;
+
+        // 플레이어가 폭탄 타일과 완전히 겹치지 않는지 확인 (완전히 벗어남)
+        const isCompletelyOutside =
+            playerRight < bombLeft ||   // 왼쪽으로 벗어남
+            playerLeft > bombRight ||   // 오른쪽으로 벗어남
+            playerBottom < bombTop ||   // 위쪽으로 벗어남
+            playerTop > bombBottom;     // 아래쪽으로 벗어남
+
+        // 완전히 벗어났다면 탈출 처리
+        if (isCompletelyOutside) {
             bomb.escapedPlayers.push(player.id);
 
             // Firebase에 탈출 상태 업데이트
