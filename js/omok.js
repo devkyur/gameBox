@@ -133,59 +133,51 @@ function initBoard() {
     }
 }
 
-// ========== 보드 인코딩 (Firebase 저장용) ==========
-// Firebase 배열 순환 참조 문제를 피하기 위해 문자열로 인코딩
-// 문자열 형식: "000012000..." (길이 225, 각 문자는 0/1/2)
-// 0=빈칸, 1=흑돌, 2=백돌
+// ========== 보드 인코딩 (Firebase 저장용 - 희소 객체) ==========
+// Firebase 배열/문자열 순환 참조 문제 완전 해결
+// 빈 칸은 저장하지 않고, 돌이 놓인 위치만 객체로 저장
+// 형식: { "0_0": 1, "7_7": 1, "8_7": 2 } (1=흑돌, 2=백돌)
 function encodeBoard(board) {
-    let encoded = '';
+    const sparse = {};
     for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
         for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
             const cell = board[y][x];
             if (cell === 'black') {
-                encoded += '1';
+                sparse[`${x}_${y}`] = 1;
             } else if (cell === 'white') {
-                encoded += '2';
-            } else {
-                encoded += '0';
+                sparse[`${x}_${y}`] = 2;
             }
+            // 빈 칸(0)은 저장하지 않음
         }
     }
-    return encoded;
+    return sparse;
 }
 
-// ========== 보드 디코딩 (Firebase에서 읽기) ==========
-function decodeBoard(encoded) {
-    if (!encoded || typeof encoded !== 'string') {
-        // 데이터가 없으면 빈 보드 반환
-        const board = [];
-        for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
-            const row = [];
-            for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
-                row.push(STONE_COLOR.EMPTY);
-            }
-            board.push(row);
-        }
-        return board;
-    }
-
+// ========== 보드 디코딩 (Firebase에서 읽기 - 희소 객체) ==========
+function decodeBoard(sparse) {
+    // 빈 보드 생성
     const board = [];
     for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
         const row = [];
         for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
-            const index = y * CONFIG.BOARD_SIZE + x;
-            const char = encoded[index] || '0';
-            // 문자 코드를 값으로 변환
-            if (char === '1') {
-                row.push('black');
-            } else if (char === '2') {
-                row.push('white');
-            } else {
-                row.push(STONE_COLOR.EMPTY);
-            }
+            row.push(STONE_COLOR.EMPTY);
         }
         board.push(row);
     }
+
+    // 저장된 돌만 복원
+    if (sparse && typeof sparse === 'object') {
+        for (const key in sparse) {
+            const [x, y] = key.split('_').map(Number);
+            const value = sparse[key];
+            if (value === 1) {
+                board[y][x] = 'black';
+            } else if (value === 2) {
+                board[y][x] = 'white';
+            }
+        }
+    }
+
     return board;
 }
 
@@ -286,20 +278,10 @@ async function initializeGame() {
             }
         };
 
-        // 빈 보드 생성 (2차원 배열)
-        const board2D = [];
-        for (let y = 0; y < CONFIG.BOARD_SIZE; y++) {
-            const row = [];
-            for (let x = 0; x < CONFIG.BOARD_SIZE; x++) {
-                row.push(STONE_COLOR.EMPTY);
-            }
-            board2D.push(row);
-        }
-
-        // 게임 상태 초기화 (보드는 문자열로 인코딩해서 저장)
+        // 게임 상태 초기화 (빈 보드는 빈 객체로 저장)
         await set(gameRef, {
             players: players,
-            board: encodeBoard(board2D),
+            board: {},  // 희소 객체 방식: 빈 보드는 빈 객체
             currentTurn: 'black',
             turnStartTime: Date.now(),
             gameOver: false,
