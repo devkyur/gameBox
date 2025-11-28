@@ -62,6 +62,8 @@ let gameState = {
     board: [],
     currentPiece: null,
     nextPiece: null,
+    holdPiece: null,
+    canHold: true,
     score: 0,
     lines: 0,
     level: 1,
@@ -81,6 +83,8 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-piece-canvas');
 const nextCtx = nextCanvas.getContext('2d');
+const holdCanvas = document.getElementById('hold-piece-canvas');
+const holdCtx = holdCanvas.getContext('2d');
 
 // 키보드 입력
 const keys = {
@@ -258,7 +262,15 @@ async function initGameState() {
 function setupEventListeners() {
     // 키보드 입력
     document.addEventListener('keydown', (e) => {
-        if (!gameState.currentPiece || gameState.gameOver) return;
+        if (gameState.gameOver) return;
+
+        if (e.key === 'Shift') {
+            holdCurrentPiece();
+            e.preventDefault();
+            return;
+        }
+
+        if (!gameState.currentPiece) return;
 
         if (e.key === 'ArrowLeft') {
             movePiece(-1, 0);
@@ -341,11 +353,54 @@ function spawnPiece() {
     gameState.currentPiece.y = 0;
 
     gameState.nextPiece = getRandomTetromino();
+    gameState.canHold = true; // 새 블록이 나오면 다시 Hold 가능
 
     // 게임 오버 체크 (새 블록이 바로 충돌)
     if (checkCollision(gameState.currentPiece.x, gameState.currentPiece.y, gameState.currentPiece.shape)) {
         playerDied();
     }
+}
+
+/**
+ * Hold 기능 (현재 블록을 보관)
+ */
+function holdCurrentPiece() {
+    if (!gameState.canHold || !gameState.currentPiece) return;
+
+    if (gameState.holdPiece === null) {
+        // 처음 Hold하는 경우
+        gameState.holdPiece = {
+            type: gameState.currentPiece.type,
+            shape: TETROMINOS[gameState.currentPiece.type].shape.map(row => [...row]),
+            color: gameState.currentPiece.color,
+        };
+        spawnPiece();
+    } else {
+        // Hold된 블록과 교체
+        const temp = {
+            type: gameState.currentPiece.type,
+            shape: TETROMINOS[gameState.currentPiece.type].shape.map(row => [...row]),
+            color: gameState.currentPiece.color,
+        };
+
+        gameState.currentPiece = {
+            type: gameState.holdPiece.type,
+            shape: gameState.holdPiece.shape.map(row => [...row]),
+            color: gameState.holdPiece.color,
+            x: Math.floor(CONFIG.COLS / 2) - Math.floor(gameState.holdPiece.shape[0].length / 2),
+            y: 0,
+        };
+
+        gameState.holdPiece = temp;
+
+        // Hold 블록이 바로 충돌하는 경우 게임 오버
+        if (checkCollision(gameState.currentPiece.x, gameState.currentPiece.y, gameState.currentPiece.shape)) {
+            playerDied();
+        }
+    }
+
+    gameState.canHold = false; // 한 번 Hold하면 다음 블록이 나올 때까지 불가
+    gameState.dropCounter = 0; // 드롭 카운터 리셋
 }
 
 /**
@@ -361,6 +416,22 @@ function getRandomTetromino() {
         x: 0,
         y: 0,
     };
+}
+
+/**
+ * Ghost piece의 Y 위치 계산 (하드 드롭 위치)
+ */
+function getGhostY() {
+    if (!gameState.currentPiece) return 0;
+
+    let ghostY = gameState.currentPiece.y;
+
+    // 충돌할 때까지 아래로 이동
+    while (!checkCollision(gameState.currentPiece.x, ghostY + 1, gameState.currentPiece.shape)) {
+        ghostY++;
+    }
+
+    return ghostY;
 }
 
 /**
@@ -843,6 +914,28 @@ function render() {
         }
     }
 
+    // Ghost piece (그림자 블록) 렌더링
+    if (gameState.currentPiece) {
+        const ghostY = getGhostY();
+        const piece = gameState.currentPiece;
+
+        // 흐릿한 색상으로 그림자 표시
+        ctx.fillStyle = piece.color + '40'; // 25% 투명도
+
+        for (let y = 0; y < piece.shape.length; y++) {
+            for (let x = 0; x < piece.shape[y].length; x++) {
+                if (piece.shape[y][x]) {
+                    ctx.fillRect(
+                        (piece.x + x) * CONFIG.BLOCK_SIZE + 1,
+                        (ghostY + y) * CONFIG.BLOCK_SIZE + 1,
+                        CONFIG.BLOCK_SIZE - 2,
+                        CONFIG.BLOCK_SIZE - 2
+                    );
+                }
+            }
+        }
+    }
+
     // 현재 블록 렌더링
     if (gameState.currentPiece) {
         ctx.fillStyle = gameState.currentPiece.color;
@@ -876,6 +969,32 @@ function render() {
             for (let x = 0; x < next.shape[y].length; x++) {
                 if (next.shape[y][x]) {
                     nextCtx.fillRect(
+                        (offsetX + x) * 30,
+                        (offsetY + y) * 30,
+                        28,
+                        28
+                    );
+                }
+            }
+        }
+    }
+
+    // Hold 블록 렌더링
+    holdCtx.fillStyle = '#F5F5F5';
+    holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+
+    if (gameState.holdPiece) {
+        // canHold가 false면 약간 어둡게 표시
+        const opacity = gameState.canHold ? 'FF' : '80';
+        holdCtx.fillStyle = gameState.holdPiece.color + opacity;
+        const hold = gameState.holdPiece;
+        const offsetX = (4 - hold.shape[0].length) / 2;
+        const offsetY = (4 - hold.shape.length) / 2;
+
+        for (let y = 0; y < hold.shape.length; y++) {
+            for (let x = 0; x < hold.shape[y].length; x++) {
+                if (hold.shape[y][x]) {
+                    holdCtx.fillRect(
                         (offsetX + x) * 30,
                         (offsetY + y) * 30,
                         28,
