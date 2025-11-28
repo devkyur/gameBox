@@ -318,6 +318,17 @@ async function startGame() {
 async function leaveRoom() {
     try {
         const db = await getDatabase();
+
+        // 현재 방 상태 확인
+        const snapshot = await get(roomRef);
+        const roomData = snapshot.val();
+
+        if (!roomData) {
+            cleanup();
+            URLParams.navigate('lobby.html', { game: currentGameId });
+            return;
+        }
+
         // 플레이어 제거
         const playerRef = ref(
             db,
@@ -325,36 +336,29 @@ async function leaveRoom() {
         );
         await remove(playerRef);
 
-        // 방장이 나가는 경우
-        if (isHost) {
-            const snapshot = await get(roomRef);
-            const roomData = snapshot.val();
+        // 남은 플레이어 확인
+        const remainingPlayers = Object.keys(roomData.players || {}).filter(
+            id => id !== currentPlayerId
+        );
 
-            if (roomData && roomData.players) {
-                const remainingPlayers = Object.keys(roomData.players);
+        if (remainingPlayers.length === 0) {
+            // 모든 플레이어가 나간 경우 방 삭제
+            await remove(roomRef);
+        } else if (isHost) {
+            // 방장이 나가는 경우 새로운 방장 지정
+            const newHostId = remainingPlayers[0];
+            const hostRef = ref(
+                db,
+                `rooms/${currentGameId}/${currentRoomId}/hostId`
+            );
+            await set(hostRef, newHostId);
 
-                if (remainingPlayers.length === 0) {
-                    // 모든 플레이어가 나간 경우 방 삭제
-                    await remove(roomRef);
-                } else {
-                    // 새로운 방장 지정
-                    const newHostId = remainingPlayers[0];
-                    const hostRef = ref(
-                        db,
-                        `rooms/${currentGameId}/${currentRoomId}/hostId`
-                    );
-                    await set(hostRef, newHostId);
-
-                    // 새 방장의 ready 상태 false로
-                    const newHostReadyRef = ref(
-                        db,
-                        `rooms/${currentGameId}/${currentRoomId}/players/${newHostId}/ready`
-                    );
-                    await set(newHostReadyRef, false);
-
-                    showNotification('방장이 변경되었습니다.', 'info');
-                }
-            }
+            // 새 방장의 ready 상태 false로
+            const newHostReadyRef = ref(
+                db,
+                `rooms/${currentGameId}/${currentRoomId}/players/${newHostId}/ready`
+            );
+            await set(newHostReadyRef, false);
         }
 
         cleanup();

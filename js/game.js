@@ -2,7 +2,7 @@
  * 물풍선 게임 로직
  */
 
-import { getDatabase, ref, set, update as updateDB, onValue, off } from './firebase-config.js';
+import { getDatabase, ref, set, update as updateDB, onValue, off, get, remove } from './firebase-config.js';
 import { Storage, URLParams, showNotification } from './utils.js';
 
 // 게임 설정
@@ -351,13 +351,26 @@ function setupEventListeners() {
     });
 
     // 게임 오버 모달 버튼
-    document.getElementById('return-lobby-btn').addEventListener('click', () => {
-        URLParams.navigate('lobby.html', { game: gameState.gameId });
+    document.getElementById('return-lobby-btn').addEventListener('click', async () => {
+        await leaveRoomAndReturnToLobby();
     });
 
     document.getElementById('restart-game-btn').addEventListener('click', async () => {
         // 게임 상태를 완전히 초기화
         await resetGame();
+    });
+
+    // 페이지 나가기 감지 (F5, 창 닫기 등)
+    window.addEventListener('beforeunload', async (e) => {
+        // 게임 진행 중이고 아직 살아있는 경우 실격 처리
+        if (!gameState.gameOver && gameState.players[gameState.playerId]?.alive) {
+            // 플레이어를 사망 처리
+            const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/players/${gameState.playerId}`);
+            await updateDB(playerRef, {
+                alive: false,
+                trapped: false
+            });
+        }
     });
 }
 
@@ -394,6 +407,49 @@ async function resetGame() {
     } catch (error) {
         console.error('게임 리셋 실패:', error);
         showNotification('게임 리셋에 실패했습니다.', 'error');
+    }
+}
+
+/**
+ * 방을 나가고 로비로 돌아가기
+ */
+async function leaveRoomAndReturnToLobby() {
+    try {
+        // 현재 방 상태 확인
+        const snapshot = await get(roomRef);
+        const roomData = snapshot.val();
+
+        if (roomData && roomData.players) {
+            // 플레이어 제거
+            const playerRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/players/${gameState.playerId}`);
+            await remove(playerRef);
+
+            // 남은 플레이어 확인
+            const remainingPlayers = Object.keys(roomData.players).filter(
+                id => id !== gameState.playerId
+            );
+
+            if (remainingPlayers.length === 0) {
+                // 모든 플레이어가 나간 경우 방 삭제
+                await remove(roomRef);
+            } else if (roomData.hostId === gameState.playerId) {
+                // 방장이 나가는 경우 새로운 방장 지정
+                const newHostId = remainingPlayers[0];
+                const hostRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/hostId`);
+                await set(hostRef, newHostId);
+
+                // 새 방장의 ready 상태 false로
+                const newHostReadyRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/players/${newHostId}/ready`);
+                await set(newHostReadyRef, false);
+            }
+        }
+
+        // 로비로 이동
+        URLParams.navigate('lobby.html', { game: gameState.gameId });
+    } catch (error) {
+        console.error('방 나가기 실패:', error);
+        // 에러가 나도 로비로 이동
+        URLParams.navigate('lobby.html', { game: gameState.gameId });
     }
 }
 
