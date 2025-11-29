@@ -4,7 +4,7 @@
  */
 
 import { getDatabase } from './firebase-config.js';
-import { ref, set, update as updateDB, onValue, off } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { ref, set, update as updateDB, onValue, off, get } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 import { URLParams, Storage, showNotification } from './utils.js';
 
 // ========== 설정 ==========
@@ -197,15 +197,27 @@ function setupFirebaseSync() {
         gameState.isHost = roomData.hostId === gameState.playerId;
 
         // 호스트가 game 데이터 없으면 초기화 (Crazy Arcade 패턴!)
+        // 중요: async 함수이지만 Fire-and-forget 방식으로 호출
         if (gameState.isHost && !roomData.game) {
-            initializeGame();
+            console.log('호스트가 게임을 초기화합니다.');
+            initializeGame().catch(err => {
+                console.error('initializeGame 오류:', err);
+            });
         }
     });
 
-    // game 리스너 (별도)
+    // game 리스너 (별도) - 실제 게임 데이터 동기화
     onValue(gameRef, (snapshot) => {
         const data = snapshot.val();
-        if (!data) return;
+        if (!data) {
+            console.log('게임 데이터가 아직 없습니다.');
+            return;
+        }
+
+        // 게임 시작 시간 저장
+        if (data.startTime && !gameState.startTime) {
+            gameState.startTime = data.startTime;
+        }
 
         // 플레이어 색상 할당
         if (data.players) {
@@ -260,18 +272,33 @@ function setupFirebaseSync() {
 }
 
 // ========== 게임 초기화 (호스트만 실행) ==========
+// Crazy Arcade 패턴 완전 적용: 간단하고 직접적인 초기화
+let isInitializing = false; // 중복 초기화 방지 플래그
+
 async function initializeGame() {
+    // 중복 초기화 방지
+    if (isInitializing) {
+        console.log('이미 초기화 중입니다.');
+        return;
+    }
+
+    isInitializing = true;
+
     try {
-        // get()을 사용하여 한 번만 읽기 (onValue 중첩 방지!)
-        const { get } = await import('https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js');
+        // roomRef에서 플레이어 정보 읽기 (get() 사용 - 한 번만 읽기)
         const roomSnapshot = await get(roomRef);
         const roomData = roomSnapshot.val();
 
-        if (!roomData) return;
+        if (!roomData || !roomData.players) {
+            console.log('방 데이터가 없습니다.');
+            isInitializing = false;
+            return;
+        }
 
-        const playerIds = Object.keys(roomData.players || {});
+        const playerIds = Object.keys(roomData.players);
         if (playerIds.length !== 2) {
-            // 2명이 아니면 대기
+            console.log('플레이어가 2명이 아닙니다:', playerIds.length);
+            isInitializing = false;
             return;
         }
 
@@ -301,8 +328,13 @@ async function initializeGame() {
             startTime: Date.now()
         });
 
+        console.log('게임 초기화 완료');
+
     } catch (error) {
         console.error('게임 초기화 실패:', error);
+    } finally {
+        // 초기화 완료 후 플래그 해제
+        isInitializing = false;
     }
 }
 
@@ -357,11 +389,30 @@ function setupEventListeners() {
     });
 
     document.getElementById('restart-game-btn').addEventListener('click', async () => {
-        // 게임 다시 시작 (방 유지)
-        if (db && gameRef) {
-            await initializeGame();
-            gameOverModal.classList.remove('show');
-            gameState.gameOver = false;
+        // 게임 다시 시작 (방 유지) - 호스트만 가능
+        if (gameState.isHost && db && gameRef) {
+            try {
+                // 보드 초기화
+                initBoard();
+                gameState.gameOver = false;
+                gameState.winner = null;
+                gameState.stoneCount = 0;
+                gameState.hoverX = -1;
+                gameState.hoverY = -1;
+
+                // 게임 재초기화
+                await initializeGame();
+
+                // 모달 닫기
+                gameOverModal.classList.remove('show');
+
+                showNotification('게임이 다시 시작되었습니다.', 'success');
+            } catch (error) {
+                console.error('게임 재시작 실패:', error);
+                showNotification('게임 재시작에 실패했습니다.', 'error');
+            }
+        } else if (!gameState.isHost) {
+            showNotification('호스트만 게임을 재시작할 수 있습니다.', 'warning');
         }
     });
 
