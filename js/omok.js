@@ -183,92 +183,117 @@ function decodeBoard(sparse) {
 }
 
 // ========== Firebase 동기화 설정 ==========
+let roomListenerAttached = false;
+let gameListenerAttached = false;
+
 function setupFirebaseSync() {
-    // room 리스너 (Crazy Arcade 방식)
-    onValue(roomRef, (snapshot) => {
-        const roomData = snapshot.val();
-        if (!roomData) {
-            showNotification('방이 존재하지 않습니다.', 'error');
-            setTimeout(() => URLParams.navigate('lobby.html', { game: 'omok' }), 2000);
-            return;
-        }
+    console.log('[Omok] Firebase 동기화 설정 시작');
 
-        // 호스트 확인
-        gameState.isHost = roomData.hostId === gameState.playerId;
+    // room 리스너 (Crazy Arcade 방식) - 중복 방지
+    if (!roomListenerAttached) {
+        roomListenerAttached = true;
+        onValue(roomRef, (snapshot) => {
+            const roomData = snapshot.val();
+            if (!roomData) {
+                console.error('[Omok] 방이 존재하지 않습니다.');
+                showNotification('방이 존재하지 않습니다.', 'error');
+                setTimeout(() => URLParams.navigate('lobby.html', { game: 'omok' }), 2000);
+                return;
+            }
 
-        // 호스트가 game 데이터 없으면 초기화 (Crazy Arcade 패턴!)
-        // 중요: async 함수이지만 Fire-and-forget 방식으로 호출
-        if (gameState.isHost && !roomData.game) {
-            console.log('호스트가 게임을 초기화합니다.');
-            initializeGame().catch(err => {
-                console.error('initializeGame 오류:', err);
-            });
-        }
-    });
+            // 호스트 확인
+            gameState.isHost = roomData.hostId === gameState.playerId;
+            console.log('[Omok] 호스트 여부:', gameState.isHost);
+
+            // 호스트가 game 데이터 없으면 초기화 (Crazy Arcade 패턴!)
+            // 중요: async 함수이지만 Fire-and-forget 방식으로 호출
+            if (gameState.isHost && !roomData.game && !isInitializing) {
+                console.log('[Omok] 호스트가 게임을 초기화합니다.');
+                initializeGame().catch(err => {
+                    console.error('[Omok] initializeGame 오류:', err);
+                });
+            }
+        });
+    }
 
     // game 리스너 (별도) - 실제 게임 데이터 동기화
-    onValue(gameRef, (snapshot) => {
-        const data = snapshot.val();
-        if (!data) {
-            console.log('게임 데이터가 아직 없습니다.');
-            return;
-        }
-
-        // 게임 시작 시간 저장
-        if (data.startTime && !gameState.startTime) {
-            gameState.startTime = data.startTime;
-        }
-
-        // 플레이어 색상 할당
-        if (data.players) {
-            const playerIds = Object.keys(data.players);
-            const myData = data.players[gameState.playerId];
-
-            if (myData) {
-                gameState.myColor = myData.color;
-                myStoneElement.className = `stone-preview stone-${myData.color}`;
-                myStatusElement.textContent = myData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+    if (!gameListenerAttached) {
+        gameListenerAttached = true;
+        onValue(gameRef, (snapshot) => {
+            const data = snapshot.val();
+            if (!data) {
+                console.log('[Omok] 게임 데이터가 아직 없습니다.');
+                return;
             }
 
-            // 상대방 정보
-            const opponentId = playerIds.find(id => id !== gameState.playerId);
-            if (opponentId) {
-                gameState.opponentId = opponentId;
-                const opponentData = data.players[opponentId];
-                gameState.opponentName = opponentData.name;
-                gameState.opponentColor = opponentData.color;
+            console.log('[Omok] 게임 데이터 동기화:', data);
 
-                opponentNameElement.textContent = opponentData.name;
-                opponentStoneElement.className = `stone-preview stone-${opponentData.color}`;
-                opponentStatusElement.textContent = opponentData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+            // 게임 시작 시간 저장
+            if (data.startTime && !gameState.startTime) {
+                gameState.startTime = data.startTime;
             }
-        }
 
-        // 보드 상태 동기화
-        if (data.board !== undefined) {
-            gameState.board = decodeBoard(data.board);
-            gameState.stoneCount = countStones();
-            stoneCountElement.textContent = gameState.stoneCount;
-            remainingMovesElement.textContent = CONFIG.BOARD_SIZE * CONFIG.BOARD_SIZE - gameState.stoneCount;
-        }
+            // 플레이어 색상 할당
+            if (data.players) {
+                const playerIds = Object.keys(data.players);
+                const myData = data.players[gameState.playerId];
 
-        // 현재 턴
-        if (data.currentTurn) {
-            gameState.currentTurn = data.currentTurn;
-            gameState.turnStartTime = data.turnStartTime || Date.now();
-            updateTurnIndicator();
-        }
+                if (myData) {
+                    gameState.myColor = myData.color;
+                    myStoneElement.className = `stone-preview stone-${myData.color}`;
+                    myStatusElement.textContent = myData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+                }
 
-        // 게임 오버
-        if (data.gameOver) {
-            gameState.gameOver = true;
-            gameState.winner = data.winner;
-            showGameOver();
-        }
+                // 상대방 정보
+                const opponentId = playerIds.find(id => id !== gameState.playerId);
+                if (opponentId) {
+                    gameState.opponentId = opponentId;
+                    const opponentData = data.players[opponentId];
+                    gameState.opponentName = opponentData.name;
+                    gameState.opponentColor = opponentData.color;
 
-        // 화면 다시 그리기
-        drawBoard();
-    });
+                    opponentNameElement.textContent = opponentData.name;
+                    opponentStoneElement.className = `stone-preview stone-${opponentData.color}`;
+                    opponentStatusElement.textContent = opponentData.color === 'black' ? '흑돌 (선공)' : '백돌 (후공)';
+                }
+            }
+
+            // 보드 상태 동기화
+            if (data.board !== undefined) {
+                try {
+                    gameState.board = decodeBoard(data.board);
+                    gameState.stoneCount = countStones();
+                    stoneCountElement.textContent = gameState.stoneCount;
+                    remainingMovesElement.textContent = CONFIG.BOARD_SIZE * CONFIG.BOARD_SIZE - gameState.stoneCount;
+                } catch (error) {
+                    console.error('[Omok] 보드 디코딩 실패:', error);
+                }
+            }
+
+            // 현재 턴
+            if (data.currentTurn) {
+                gameState.currentTurn = data.currentTurn;
+                gameState.turnStartTime = data.turnStartTime || Date.now();
+                updateTurnIndicator();
+            }
+
+            // 게임 오버
+            if (data.gameOver) {
+                gameState.gameOver = true;
+                gameState.winner = data.winner;
+                showGameOver();
+            }
+
+            // 화면 다시 그리기
+            try {
+                drawBoard();
+            } catch (error) {
+                console.error('[Omok] 보드 그리기 실패:', error);
+            }
+        });
+    }
+
+    console.log('[Omok] Firebase 동기화 설정 완료');
 }
 
 // ========== 게임 초기화 (호스트만 실행) ==========
@@ -278,47 +303,78 @@ let isInitializing = false; // 중복 초기화 방지 플래그
 async function initializeGame() {
     // 중복 초기화 방지
     if (isInitializing) {
-        console.log('이미 초기화 중입니다.');
+        console.log('[Omok] 이미 초기화 중입니다.');
         return;
     }
 
     isInitializing = true;
+    console.log('[Omok] 게임 초기화 시작');
 
     try {
+        // 필수 변수 검증
+        if (!roomRef || !gameRef) {
+            console.error('[Omok] roomRef 또는 gameRef가 없습니다.');
+            return;
+        }
+
+        if (!gameState.roomId) {
+            console.error('[Omok] roomId가 없습니다.');
+            return;
+        }
+
         // roomRef에서 플레이어 정보 읽기 (get() 사용 - 한 번만 읽기)
+        console.log('[Omok] 플레이어 정보 읽는 중...');
         const roomSnapshot = await get(roomRef);
         const roomData = roomSnapshot.val();
 
-        if (!roomData || !roomData.players) {
-            console.log('방 데이터가 없습니다.');
-            isInitializing = false;
+        if (!roomData) {
+            console.error('[Omok] 방 데이터가 없습니다.');
+            return;
+        }
+
+        if (!roomData.players) {
+            console.error('[Omok] 플레이어 데이터가 없습니다.');
             return;
         }
 
         const playerIds = Object.keys(roomData.players);
+        console.log('[Omok] 플레이어 수:', playerIds.length, '명');
+
         if (playerIds.length !== 2) {
-            console.log('플레이어가 2명이 아닙니다:', playerIds.length);
-            isInitializing = false;
+            console.log('[Omok] 플레이어가 2명이 아닙니다:', playerIds.length);
             return;
         }
 
         // 랜덤으로 흑/백 배정
-        const shuffled = playerIds.sort(() => Math.random() - 0.5);
-        const players = {
-            [shuffled[0]]: {
-                id: shuffled[0],
-                name: roomData.players[shuffled[0]].name,
-                color: 'black'
-            },
-            [shuffled[1]]: {
-                id: shuffled[1],
-                name: roomData.players[shuffled[1]].name,
-                color: 'white'
-            }
+        const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+        console.log('[Omok] 플레이어 순서:', shuffled);
+
+        // 명시적으로 플레이어 객체 생성 (순환 참조 방지)
+        const player1 = roomData.players[shuffled[0]];
+        const player2 = roomData.players[shuffled[1]];
+
+        if (!player1 || !player2) {
+            console.error('[Omok] 플레이어 데이터를 찾을 수 없습니다.');
+            return;
+        }
+
+        // 깔끔하게 새 객체로 생성 (순환 참조 완전 제거)
+        const players = {};
+        players[shuffled[0]] = {
+            id: shuffled[0],
+            name: String(player1.name || 'Player 1'),
+            color: 'black'
+        };
+        players[shuffled[1]] = {
+            id: shuffled[1],
+            name: String(player2.name || 'Player 2'),
+            color: 'white'
         };
 
+        console.log('[Omok] 플레이어 데이터 생성 완료:', players);
+
         // 게임 상태 초기화 (빈 보드는 빈 객체로 저장)
-        await set(gameRef, {
+        const gameData = {
             players: players,
             board: {},  // 희소 객체 방식: 빈 보드는 빈 객체
             currentTurn: 'black',
@@ -326,12 +382,16 @@ async function initializeGame() {
             gameOver: false,
             winner: null,
             startTime: Date.now()
-        });
+        };
 
-        console.log('게임 초기화 완료');
+        console.log('[Omok] Firebase에 게임 데이터 저장 중...');
+        await set(gameRef, gameData);
+        console.log('[Omok] 게임 초기화 완료!');
 
     } catch (error) {
-        console.error('게임 초기화 실패:', error);
+        console.error('[Omok] 게임 초기화 실패:', error);
+        console.error('[Omok] 에러 스택:', error.stack);
+        showNotification('게임 초기화에 실패했습니다.', 'error');
     } finally {
         // 초기화 완료 후 플래그 해제
         isInitializing = false;
@@ -717,13 +777,15 @@ function showGameOver() {
 
 // ========== 페이지 나가기 전 처리 ==========
 function handleBeforeUnload(event) {
+    console.log('[Omok] 페이지 나가기 전 정리');
+
     if (!gameState.gameOver) {
         // 게임 진행 중이면 패배 처리
         if (db && gameRef && gameState.opponentId) {
             updateDB(gameRef, {
                 gameOver: true,
                 winner: gameState.opponentId
-            }).catch(err => console.error('패배 처리 실패:', err));
+            }).catch(err => console.error('[Omok] 패배 처리 실패:', err));
         }
     }
 
@@ -732,20 +794,42 @@ function handleBeforeUnload(event) {
     localStorage.removeItem('current_room_id');
     localStorage.removeItem('current_game_id');
 
+    // Firebase 리스너 제거
+    if (db && roomRef) {
+        off(roomRef);
+        roomListenerAttached = false;
+    }
+
     if (db && gameRef) {
         off(gameRef);
+        gameListenerAttached = false;
     }
+
+    // 초기화 플래그 리셋
+    isInitializing = false;
 }
 
 // ========== 정리 및 나가기 ==========
 function cleanupAndLeave(page, params = {}) {
+    console.log('[Omok] 정리 및 나가기');
+
     localStorage.removeItem('game_in_progress');
     localStorage.removeItem('current_room_id');
     localStorage.removeItem('current_game_id');
 
+    // Firebase 리스너 제거
+    if (db && roomRef) {
+        off(roomRef);
+        roomListenerAttached = false;
+    }
+
     if (db && gameRef) {
         off(gameRef);
+        gameListenerAttached = false;
     }
+
+    // 초기화 플래그 리셋
+    isInitializing = false;
 
     URLParams.navigate(page, params);
 }
