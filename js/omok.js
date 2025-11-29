@@ -3,9 +3,11 @@
  * 15×15 바둑판, 1v1 대전
  */
 
-import { getDatabase } from './firebase-config.js';
-import { ref, set, update as updateDB, onValue, off, get } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getDatabase, ref, set, update, onValue, off, get } from './firebase-config.js';
 import { URLParams, Storage, showNotification } from './utils.js';
+
+// update를 updateDB로 별칭
+const updateDB = update;
 
 // ========== 설정 ==========
 const CONFIG = {
