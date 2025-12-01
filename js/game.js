@@ -307,14 +307,24 @@ function setupFirebaseSync() {
                 updatePlayerInfoUI();
             }
 
-            // 폭탄 동기화
+            // 폭탄 동기화 (escapedPlayers 로컬 상태 보존)
             if (gameData.bombs && typeof gameData.bombs === 'object') {
+                const oldBombs = gameState.bombs || [];
                 gameState.bombs = Object.values(gameData.bombs)
                     .filter(b => b !== null)
-                    .map(b => ({
-                        ...b,
-                        escapedPlayers: b.escapedPlayers || [] // escapedPlayers 초기화
-                    }));
+                    .map(b => {
+                        // 기존 폭탄 찾기 (로컬에서 수정된 escapedPlayers 보존)
+                        const oldBomb = oldBombs.find(ob => ob.id === b.id);
+                        return {
+                            ...b,
+                            // 로컬 escapedPlayers가 더 최신일 수 있음 (Firebase보다 먼저 업데이트)
+                            // Firebase 값과 로컬 값을 병합
+                            escapedPlayers: [
+                                ...(b.escapedPlayers || []),
+                                ...(oldBomb?.escapedPlayers || [])
+                            ].filter((v, i, a) => a.indexOf(v) === i) // 중복 제거
+                        };
+                    });
             } else {
                 gameState.bombs = [];
             }
@@ -663,15 +673,26 @@ async function checkBombEscape(player, oldX, oldY) {
 
         // 완전히 벗어났다면 탈출 처리
         if (isCompletelyOutside) {
-            console.log(`[Bomb Escape] 플레이어 ${player.id}가 폭탄 (${bomb.x}, ${bomb.y})에서 탈출`);
-            bomb.escapedPlayers.push(player.id);
+            console.log(`[Bomb Escape] ✅ 플레이어 ${player.id.substring(0, 20)}가 폭탄 (${bomb.x}, ${bomb.y})에서 탈출`);
 
-            // Firebase에 탈출 상태 업데이트
-            try {
-                const bombRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/bombs/${bomb.id}/escapedPlayers`);
-                await set(bombRef, bomb.escapedPlayers);
-            } catch (error) {
-                console.error('[Bomb Escape] Firebase 업데이트 실패:', error);
+            // escapedPlayers 배열이 없으면 생성
+            if (!bomb.escapedPlayers) {
+                bomb.escapedPlayers = [];
+            }
+
+            // 중복 추가 방지
+            if (!bomb.escapedPlayers.includes(player.id)) {
+                bomb.escapedPlayers.push(player.id);
+                console.log(`  현재 탈출한 플레이어:`, bomb.escapedPlayers.map(id => id.substring(0, 20)));
+
+                // Firebase에 탈출 상태 업데이트
+                try {
+                    const bombRef = ref(db, `rooms/${gameState.gameId}/${gameState.roomId}/game/bombs/${bomb.id}/escapedPlayers`);
+                    await set(bombRef, bomb.escapedPlayers);
+                    console.log(`  Firebase 업데이트 완료`);
+                } catch (error) {
+                    console.error('[Bomb Escape] Firebase 업데이트 실패:', error);
+                }
             }
         }
     }
@@ -715,8 +736,19 @@ function canMoveTo(x, y) {
         if (tile === TILE.BOMB) {
             const bomb = gameState.bombs.find(b => b.x === tileX && b.y === tileY);
             if (bomb) {
+                const isMyBomb = bomb.playerId === player.id;
+                const hasEscaped = bomb.escapedPlayers && bomb.escapedPlayers.includes(player.id);
+
+                // 디버깅 로그 - 탈출한 폭탄에 다시 진입 시도 시
+                if (isMyBomb && hasEscaped) {
+                    console.warn(`[Bomb Collision] ❌ 탈출한 내 폭탄 (${tileX}, ${tileY}) - 진입 차단!`);
+                    console.log(`  bombId: ${bomb.id}`);
+                    console.log(`  escapedPlayers:`, bomb.escapedPlayers);
+                    console.log(`  내 ID: ${player.id}`);
+                }
+
                 // 본인이 설치한 폭탄이고 아직 탈출하지 않은 경우만 통과 가능
-                if (bomb.playerId === player.id && !bomb.escapedPlayers.includes(player.id)) {
+                if (isMyBomb && !hasEscaped) {
                     // 탈출하지 않은 본인의 폭탄 → 통과 가능
                     continue;
                 }
