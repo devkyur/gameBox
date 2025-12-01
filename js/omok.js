@@ -45,6 +45,7 @@ const gameState = {
     stoneCount: 0,
     hoverX: -1,
     hoverY: -1,
+    lastMove: null,         // 마지막 수 { x, y }
 };
 
 // ========== DOM 요소 ==========
@@ -272,6 +273,11 @@ function setupFirebaseSync() {
                 }
             }
 
+            // 마지막 수 동기화
+            if (data.lastMove !== undefined) {
+                gameState.lastMove = data.lastMove;
+            }
+
             // 현재 턴
             if (data.currentTurn) {
                 gameState.currentTurn = data.currentTurn;
@@ -383,7 +389,8 @@ async function initializeGame() {
             turnStartTime: Date.now(),
             gameOver: false,
             winner: null,
-            startTime: Date.now()
+            startTime: Date.now(),
+            lastMove: null  // 마지막 수
         };
 
         console.log('[Omok] Firebase에 게임 데이터 저장 중...');
@@ -461,6 +468,7 @@ function setupEventListeners() {
                 gameState.stoneCount = 0;
                 gameState.hoverX = -1;
                 gameState.hoverY = -1;
+                gameState.lastMove = null;
 
                 // 게임 재초기화
                 await initializeGame();
@@ -573,7 +581,8 @@ async function placeStone(x, y) {
         const updates = {
             board: encodeBoard(newBoard),  // 문자열로 인코딩해서 저장
             currentTurn: nextTurn,
-            turnStartTime: Date.now()
+            turnStartTime: Date.now(),
+            lastMove: { x, y }  // 마지막 수 위치 저장
         };
 
         if (hasWon) {
@@ -680,6 +689,28 @@ function drawBoard() {
     // Hover 미리보기
     if (gameState.hoverX >= 0 && gameState.hoverY >= 0) {
         drawStone(gameState.hoverX, gameState.hoverY, gameState.myColor, 0.4);
+    }
+
+    // 마지막 수 표시
+    if (gameState.lastMove) {
+        const { x, y } = gameState.lastMove;
+        const centerX = x * CONFIG.TILE_SIZE;
+        const centerY = y * CONFIG.TILE_SIZE;
+
+        ctx.save();
+
+        // 돌 색상에 따라 마커 색상 반전
+        const stoneColor = gameState.board[y][x];
+        ctx.strokeStyle = stoneColor === 'black' ? '#FFFFFF' : '#FF0000';
+        ctx.fillStyle = stoneColor === 'black' ? '#FFFFFF' : '#FF0000';
+        ctx.lineWidth = 2;
+
+        // 작은 원 그리기
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 }
 
