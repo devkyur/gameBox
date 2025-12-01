@@ -458,31 +458,35 @@ function setupEventListeners() {
     });
 
     document.getElementById('restart-game-btn').addEventListener('click', async () => {
-        // 게임 다시 시작 (방 유지) - 호스트만 가능
-        if (gameState.isHost && db && gameRef) {
-            try {
-                // 보드 초기화
-                initBoard();
-                gameState.gameOver = false;
-                gameState.winner = null;
-                gameState.stoneCount = 0;
-                gameState.hoverX = -1;
-                gameState.hoverY = -1;
-                gameState.lastMove = null;
+        console.log('[Omok] 다시하기 버튼 클릭');
 
-                // 게임 재초기화
-                await initializeGame();
+        try {
+            // 모달 닫기
+            gameOverModal.classList.remove('show');
 
-                // 모달 닫기
-                gameOverModal.classList.remove('show');
-
-                showNotification('게임이 다시 시작되었습니다.', 'success');
-            } catch (error) {
-                console.error('게임 재시작 실패:', error);
-                showNotification('게임 재시작에 실패했습니다.', 'error');
+            // Firebase 게임 데이터 초기화 (호스트만)
+            if (gameState.isHost && db && gameRef) {
+                console.log('[Omok] 호스트가 게임 데이터 삭제 중...');
+                // game 노드만 삭제 (players는 유지)
+                await set(gameRef, null);
             }
-        } else if (!gameState.isHost) {
-            showNotification('호스트만 게임을 재시작할 수 있습니다.', 'warning');
+
+            // 잠시 대기 후 방으로 리다이렉트
+            setTimeout(() => {
+                console.log('[Omok] 방으로 이동');
+                // 게임 진행 중 플래그 제거
+                localStorage.removeItem('game_in_progress');
+
+                // 방으로 돌아가기
+                URLParams.navigate('room.html', {
+                    game: 'omok',
+                    room: gameState.roomId
+                });
+            }, 300);
+
+        } catch (error) {
+            console.error('[Omok] 다시하기 실패:', error);
+            showNotification('다시하기에 실패했습니다.', 'error');
         }
     });
 
