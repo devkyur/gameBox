@@ -714,6 +714,16 @@ function canMoveTo(x, y) {
     const player = gameState.players[gameState.playerId];
     if (!player) return false;
 
+    // 디버깅: 이동 시도 정보
+    console.log(`[canMoveTo] 🔍 위치 체크: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`  현재 폭탄 목록:`, gameState.bombs.map(b => ({
+        pos: `(${b.x},${b.y})`,
+        id: b.id,
+        playerId: b.playerId,
+        escaped: b.escapedPlayers
+    })));
+    console.log(`  내 ID: ${player.id}`);
+
     // 네 모서리 체크 (플레이어의 충돌 박스)
     const corners = [
         { x: x - margin, y: y - margin }, // 좌상단
@@ -740,10 +750,17 @@ function canMoveTo(x, y) {
 
         // 폭탄 체크
         if (tile === TILE.BOMB) {
+            console.log(`[canMoveTo] 🎯 BOMB 타일 발견: (${tileX}, ${tileY})`);
             const bomb = gameState.bombs.find(b => b.x === tileX && b.y === tileY);
+            console.log(`  폭탄 찾기 결과:`, bomb);
+
             if (bomb) {
                 const isMyBomb = bomb.playerId === player.id;
                 const hasEscaped = bomb.escapedPlayers && bomb.escapedPlayers.includes(player.id);
+
+                console.log(`  isMyBomb: ${isMyBomb}`);
+                console.log(`  hasEscaped: ${hasEscaped}`);
+                console.log(`  escapedPlayers 배열:`, bomb.escapedPlayers);
 
                 // 디버깅 로그 - 탈출한 폭탄에 다시 진입 시도 시
                 if (isMyBomb && hasEscaped) {
@@ -756,11 +773,13 @@ function canMoveTo(x, y) {
                 // 본인이 설치한 폭탄이고 아직 탈출하지 않은 경우만 통과 가능
                 if (isMyBomb && !hasEscaped) {
                     // 탈출하지 않은 본인의 폭탄 → 통과 가능
+                    console.log(`  ✅ 통과 가능: 아직 탈출하지 않은 내 폭탄`);
                     continue;
                 }
                 // 그 외의 경우 진입 불가:
                 // 1. 다른 사람의 폭탄
                 // 2. 이미 탈출한 본인의 폭탄 (SOLID_WALL처럼 막힘)
+                console.log(`  ❌ 진입 차단: ${isMyBomb ? '탈출한 내 폭탄' : '다른 플레이어의 폭탄'}`);
                 return false;
             }
         }
