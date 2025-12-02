@@ -658,21 +658,27 @@ async function checkBombEscape(player, oldX, oldY) {
         const bombTop = bomb.y;
         const bombBottom = bomb.y + 1;
 
-        // 플레이어의 충돌 박스 범위
-        const playerLeft = player.x - margin;
-        const playerRight = player.x + margin;
-        const playerTop = player.y - margin;
-        const playerBottom = player.y + margin;
+        // 플레이어 중심 좌표
+        const playerCenterX = player.x;
+        const playerCenterY = player.y;
 
-        // 플레이어가 폭탄 타일과 완전히 겹치지 않는지 확인 (완전히 벗어남)
-        const isCompletelyOutside =
-            playerRight <= bombLeft ||   // 왼쪽으로 완전히 벗어남
-            playerLeft >= bombRight ||   // 오른쪽으로 완전히 벗어남
-            playerBottom <= bombTop ||   // 위쪽으로 완전히 벗어남
-            playerTop >= bombBottom;     // 아래쪽으로 완전히 벗어남
+        // 플레이어의 중심이 폭탄 타일 범위 밖에 있는지 확인
+        // 중심이 벗어나면 탈출로 간주 (충돌 박스가 아직 겹쳐도 OK)
+        const isCenterOutside =
+            playerCenterX < bombLeft ||    // 왼쪽으로 벗어남
+            playerCenterX >= bombRight ||  // 오른쪽으로 벗어남
+            playerCenterY < bombTop ||     // 위쪽으로 벗어남
+            playerCenterY >= bombBottom;   // 아래쪽으로 벗어남
 
-        // 완전히 벗어났다면 탈출 처리
-        if (isCompletelyOutside) {
+        // 디버깅 로그
+        if (bomb.playerId === player.id && !bomb.escapedPlayers?.includes(player.id)) {
+            console.log(`[Bomb Escape Check] 폭탄 (${bomb.x}, ${bomb.y}), 플레이어 중심 (${playerCenterX.toFixed(2)}, ${playerCenterY.toFixed(2)})`);
+            console.log(`  범위: [${bombLeft}-${bombRight}) × [${bombTop}-${bombBottom})`);
+            console.log(`  탈출 여부: ${isCenterOutside}`);
+        }
+
+        // 중심이 벗어났다면 탈출 처리
+        if (isCenterOutside) {
             console.log(`[Bomb Escape] ✅ 플레이어 ${player.id.substring(0, 20)}가 폭탄 (${bomb.x}, ${bomb.y})에서 탈출`);
 
             // escapedPlayers 배열이 없으면 생성
