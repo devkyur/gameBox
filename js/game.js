@@ -658,28 +658,25 @@ async function checkBombEscape(player, oldX, oldY) {
         const bombTop = bomb.y;
         const bombBottom = bomb.y + 1;
 
-        // 플레이어 중심 좌표
-        const playerCenterX = player.x;
-        const playerCenterY = player.y;
+        // 플레이어 충돌 박스의 4개 모서리 계산
+        const corners = [
+            { x: player.x - margin, y: player.y - margin }, // 좌상단
+            { x: player.x + margin, y: player.y - margin }, // 우상단
+            { x: player.x - margin, y: player.y + margin }, // 좌하단
+            { x: player.x + margin, y: player.y + margin }, // 우하단
+        ];
 
-        // 플레이어의 중심이 폭탄 타일 범위 밖에 있는지 확인
-        // 중심이 벗어나면 탈출로 간주 (충돌 박스가 아직 겹쳐도 OK)
-        const isCenterOutside =
-            playerCenterX < bombLeft ||    // 왼쪽으로 벗어남
-            playerCenterX >= bombRight ||  // 오른쪽으로 벗어남
-            playerCenterY < bombTop ||     // 위쪽으로 벗어남
-            playerCenterY >= bombBottom;   // 아래쪽으로 벗어남
+        // 모든 모서리가 폭탄 타일 밖에 있는지 확인
+        const allCornersOutside = corners.every(corner => {
+            return corner.x < bombLeft ||    // 왼쪽으로 벗어남
+                   corner.x >= bombRight ||  // 오른쪽으로 벗어남
+                   corner.y < bombTop ||     // 위쪽으로 벗어남
+                   corner.y >= bombBottom;   // 아래쪽으로 벗어남
+        });
 
-        // 디버깅 로그
-        if (bomb.playerId === player.id && !bomb.escapedPlayers?.includes(player.id)) {
-            console.log(`[Bomb Escape Check] 폭탄 (${bomb.x}, ${bomb.y}), 플레이어 중심 (${playerCenterX.toFixed(2)}, ${playerCenterY.toFixed(2)})`);
-            console.log(`  범위: [${bombLeft}-${bombRight}) × [${bombTop}-${bombBottom})`);
-            console.log(`  탈출 여부: ${isCenterOutside}`);
-        }
-
-        // 중심이 벗어났다면 탈출 처리
-        if (isCenterOutside) {
-            console.log(`[Bomb Escape] ✅ 플레이어 ${player.id.substring(0, 20)}가 폭탄 (${bomb.x}, ${bomb.y})에서 탈출`);
+        // 모든 모서리가 벗어났다면 탈출 처리
+        if (allCornersOutside) {
+            console.log(`[Bomb Escape] ✅ 플레이어 ${player.id.substring(0, 20)}가 폭탄 (${bomb.x}, ${bomb.y})에서 완전히 탈출`);
 
             // escapedPlayers 배열이 없으면 생성
             if (!bomb.escapedPlayers) {
@@ -689,7 +686,6 @@ async function checkBombEscape(player, oldX, oldY) {
             // 중복 추가 방지
             if (!bomb.escapedPlayers.includes(player.id)) {
                 bomb.escapedPlayers.push(player.id);
-                console.log(`  현재 탈출한 플레이어:`, bomb.escapedPlayers.map(id => id.substring(0, 20)));
 
                 // Firebase에 탈출 상태 업데이트
                 try {
@@ -713,16 +709,6 @@ function canMoveTo(x, y) {
 
     const player = gameState.players[gameState.playerId];
     if (!player) return false;
-
-    // 디버깅: 이동 시도 정보
-    console.log(`[canMoveTo] 🔍 위치 체크: (${x.toFixed(2)}, ${y.toFixed(2)})`);
-    console.log(`  현재 폭탄 목록:`, gameState.bombs.map(b => ({
-        pos: `(${b.x},${b.y})`,
-        id: b.id,
-        playerId: b.playerId,
-        escaped: b.escapedPlayers
-    })));
-    console.log(`  내 ID: ${player.id}`);
 
     // 네 모서리 체크 (플레이어의 충돌 박스)
     const corners = [
@@ -750,36 +736,19 @@ function canMoveTo(x, y) {
 
         // 폭탄 체크
         if (tile === TILE.BOMB) {
-            console.log(`[canMoveTo] 🎯 BOMB 타일 발견: (${tileX}, ${tileY})`);
             const bomb = gameState.bombs.find(b => b.x === tileX && b.y === tileY);
-            console.log(`  폭탄 찾기 결과:`, bomb);
-
             if (bomb) {
                 const isMyBomb = bomb.playerId === player.id;
                 const hasEscaped = bomb.escapedPlayers && bomb.escapedPlayers.includes(player.id);
 
-                console.log(`  isMyBomb: ${isMyBomb}`);
-                console.log(`  hasEscaped: ${hasEscaped}`);
-                console.log(`  escapedPlayers 배열:`, bomb.escapedPlayers);
-
-                // 디버깅 로그 - 탈출한 폭탄에 다시 진입 시도 시
-                if (isMyBomb && hasEscaped) {
-                    console.warn(`[Bomb Collision] ❌ 탈출한 내 폭탄 (${tileX}, ${tileY}) - 진입 차단!`);
-                    console.log(`  bombId: ${bomb.id}`);
-                    console.log(`  escapedPlayers:`, bomb.escapedPlayers);
-                    console.log(`  내 ID: ${player.id}`);
-                }
-
                 // 본인이 설치한 폭탄이고 아직 탈출하지 않은 경우만 통과 가능
                 if (isMyBomb && !hasEscaped) {
                     // 탈출하지 않은 본인의 폭탄 → 통과 가능
-                    console.log(`  ✅ 통과 가능: 아직 탈출하지 않은 내 폭탄`);
                     continue;
                 }
                 // 그 외의 경우 진입 불가:
                 // 1. 다른 사람의 폭탄
                 // 2. 이미 탈출한 본인의 폭탄 (SOLID_WALL처럼 막힘)
-                console.log(`  ❌ 진입 차단: ${isMyBomb ? '탈출한 내 폭탄' : '다른 플레이어의 폭탄'}`);
                 return false;
             }
         }
